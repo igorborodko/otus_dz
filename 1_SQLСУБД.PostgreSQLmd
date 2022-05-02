@@ -1,0 +1,75 @@
+# otus_dz
+--Описание/Пошаговая инструкция выполнения домашнего задания:
+создать новый проект в Google Cloud Platform, Яндекс облако или на любых ВМ, например postgres2022-, где yyyymmdd год, месяц и день вашего рождения (имя проекта должно быть уникально на уровне GCP)
+--далее создать инстанс виртуальной машины Compute Engine с дефолтными параметрами - 1-2 ядра, 2-4Гб памяти, любой линукс, на курсе Ubuntu 100%
+--добавить свой ssh ключ в GCE metadata
+--зайти удаленным ssh (первая сессия), не забывайте про ssh-add
+-----------------------------------
+
+В целях экономии денег, мне создал знакомый cloud.
+Доступ к машине у меня только по ssh.
+Не возникнет ли проблем в дальнейшем с таким доступом?
+
+-----------------------------------
+
+--поставить PostgreSQL из пакетов apt install
+--зайти вторым ssh (вторая сессия)
+--запустить везде psql из под пользователя postgres
+
+--выключить auto commit
+
+	\set AUTOCOMMIT OFF
+	
+--сделать в первой сессии новую таблицу и наполнить ее данными create table persons(id serial, first_name text, second_name text); insert into persons(first_name, second_name) values('ivan', 'ivanov'); insert into persons(first_name, second_name) values('petr', 'petrov'); commit;
+
+done
+
+--посмотреть текущий уровень изоляции: show transaction isolation level;
+
+postgres=# show transaction isolation level;
+ transaction_isolation
+-----------------------
+ read committed
+(1 row)
+
+--начать новую транзакцию в обоих сессиях с дефолтным (не меняя) уровнем изоляции
+--в первой сессии добавить новую запись insert into persons(first_name, second_name) values('sergey', 'sergeev');
+
+--сделать select * from persons во второй сессии
+--видите ли вы новую запись и если да то почему?
+
+нет
+
+--завершить первую транзакцию - commit;
+--сделать select * from persons во второй сессии
+--видите ли вы новую запись и если да то почему?
+
+Вижу, потому что сделал commit, уровень Read Committed видит только те данные, которые были зафиксированы до начала запроса
+
+
+--завершите транзакцию во второй сессии
+--начать новые но уже repeatable read транзакции - set transaction isolation level repeatable read;
+
+postgres=*# show transaction isolation level;
+ transaction_isolation
+-----------------------
+ repeatable read
+(1 row)
+
+--в первой сессии добавить новую запись insert into persons(first_name, second_name) values('sveta', 'svetova');
+--сделать select * from persons во второй сессии
+--видите ли вы новую запись и если да то почему?
+
+нет
+
+--завершить первую транзакцию - commit;
+--сделать select * from persons во второй сессии
+--видите ли вы новую запись и если да то почему?
+
+Вижу, потому что выполнили commit, в repeatable read не видны незафиксированные данные и изменения, произведённые другими транзакциями в процессе выполнения данной транзакции.
+
+--завершить вторую транзакцию
+--сделать select * from persons во второй сессии
+--видите ли вы новую запись и если да то почему? 
+
+Потомучто в предыдущем пункте выполнил commit.
