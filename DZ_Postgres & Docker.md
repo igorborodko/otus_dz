@@ -1,7 +1,4 @@
 # otus_dz
-• сделать в GCE/ЯО/Аналоги инстанс с Ubuntu 20.04
-• поставить на нем Docker Engine
-
 
 • сделать каталог /var/lib/postgres
 
@@ -14,11 +11,11 @@ done
 
 Пробовал переписать ваш файл:
 Сначала выдавал ошибку в строке:
-image: bitnami/redis:6.2.7
+**image: bitnami/redis:6.2.7**
 
 Избавился от табулатуры, далее ошибка была
 
-ERROR: In file './docker-compose.yaml', service must be a mapping, not a NoneType.
+**ERROR: In file './docker-compose.yaml', service must be a mapping, not a NoneType.**
 
 рповерял docker-compose config
 
@@ -54,8 +51,7 @@ CONTAINER ID   IMAGE                COMMAND                  CREATED          ST
 
 
 
-• подключится из контейнера с клиентом к контейнеру с сервером и сделать
-таблицу с парой строк
+• подключится из контейнера с клиентом к контейнеру с сервером и сделать таблицу с парой строк
 
 docker exec -it 73c83f3324e8 bash
 
@@ -82,5 +78,4 @@ select * from persons;
 
 Подключался к DB с помощью DBeaver
 
-![Uploading image.png…]()
 
