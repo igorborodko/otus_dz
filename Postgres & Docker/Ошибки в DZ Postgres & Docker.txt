@@ -1,0 +1,81 @@
+
+
+#Запускаю docker-compose
+root@superserver:/home/docker-comp# docker-compose up -d
+Pulling pg_db (postgres:14)...
+14: Pulling from library/postgres
+Digest: sha256:2c954f8c5d03da58f8b82645b783b56c1135df17e650b186b296fa1bb71f9cfd
+Status: Downloaded newer image for postgres:14
+Creating docker-comp_pg_db_1 ... done
+
+#Проверяю:
+root@superserver:/home/docker-comp# docker ps
+CONTAINER ID   IMAGE         COMMAND                  CREATED          STATUS          PORTS                                       NAMES
+62b38e74cab0   postgres:14   "docker-entrypoint.s…"   19 minutes ago   Up 19 minutes   0.0.0.0:5430->5432/tcp, :::5430->5432/tcp   docker-comp_pg_db_1
+
+#Подключаюсь к контейнеру postgres
+root@superserver:/home/docker-comp# docker exec -it 62b38e74cab0 bash
+
+root@62b38e74cab0:/# psql -h localhost -p 5432 -U postgres -W
+Password:
+psql (14.2 (Debian 14.2-1.pgdg110+1))
+Type "help" for help.
+
+#Создаю базу и подключаюсь
+postgres=# create table persons(id serial, first_name text, second_name text); insert into persons(first_name, second_name) values('ivan', 'ivanov'); insert into persons(fir                                                                                              st_name, second_name) values('petr', 'petrov'); commit;
+CREATE TABLE
+INSERT 0 1
+INSERT 0 1
+WARNING:  there is no transaction in progress
+COMMIT
+
+#Проверяю DB
+postgres=# select * from persons;
+ id | first_name | second_name
+----+------------+-------------
+  1 | ivan       | ivanov
+  2 | petr       | petrov
+(2 rows)
+
+
+#Выхожу
+postgres=# exit
+root@62b38e74cab0:/# exit
+exit
+
+#Останавливаю компос
+root@superserver:/home/docker-comp# docker-compose stop
+Stopping docker-comp_pg_db_1 ... done
+
+#Проверяю
+root@superserver:/home/docker-comp# docker ps
+CONTAINER ID   IMAGE     COMMAND   CREATED   STATUS    PORTS     NAMES
+
+
+root@superserver:/home/docker-comp# docker ps -a
+CONTAINER ID   IMAGE                COMMAND                  CREATED          STATUS                      PORTS     NAMES
+62b38e74cab0   postgres:14          "docker-entrypoint.s…"   39 minutes ago   Exited (0) 29 seconds ago             docker-comp_pg_db_1
+
+#Удаляю
+root@superserver:/home/docker-comp#  docker rm docker-comp_pg_db_1
+docker-comp_pg_db_1
+
+#Запускаю компос
+root@superserver:/home/docker-comp# docker-compose up -d
+Creating docker-comp_pg_db_1 ... done
+
+
+root@superserver:/home/docker-comp# docker ps
+CONTAINER ID   IMAGE         COMMAND                  CREATED          STATUS          PORTS                                       NAMES
+3676269a0900   postgres:14   "docker-entrypoint.s…"   21 seconds ago   Up 21 seconds   0.0.0.0:5430->5432/tcp, :::5430->5432/tcp   docker-comp_pg_db_1
+
+#Подключаюсь и проверяю базу.
+root@superserver:/home/docker-comp# docker exec -it docker-comp_pg_db_1 bash
+root@3676269a0900:/# psql -h localhost -p 5432 -U postgres -W
+Password:
+psql (14.2 (Debian 14.2-1.pgdg110+1))
+Type "help" for help.
+
+postgres=# select * from persons;
+ERROR:  relation "persons" does not exist
+LINE 1: select * from persons;
