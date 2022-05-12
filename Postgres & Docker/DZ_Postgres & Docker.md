@@ -23,25 +23,7 @@ done
 
 Переписал отдельно докер компос, сохранить базу после удаления контейнера не удалось:
 
-docker-compose
--------------------------------------------------------------------------------
-version: '3.9'
-
-services:
-  pg_db:
-    image: postgres:14.2
-    restart: always
-    environment:
-      - POSTGRES_PASSWORD=pasword123
-      - POSTGRES_USER=postgres
-      - POSTGRES_DB=postgres
-    volumes:
-      - pg_project:/var/lib/postgres/data
-    ports:
-      - "5430:5432"
-
-volumes:
-  pg_project:
+docker-compose - во вложении.
 -------------------------------------------------------------------------------
 
 
