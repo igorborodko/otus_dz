@@ -1,5 +1,4 @@
 
-
 --Подключился к базе, залил 2 млн записей:
 sudo su postgres 
 cd $HOME && wget --quiet https://edu.postgrespro.ru/demo_small.zip && unzip demo_small.zip && psql < demo_small.sql
@@ -69,7 +68,7 @@ Current query for procpid 78215:
 
 INSERT INTO test SELECT s.id FROM generate_series(1,1000000000) AS s(id);
 
--- 2 окно параллейно с запуском pgtop
+-- 2 окно параллейно с запуском gtop
 sudo -u postgres psql
 CREATE TABLE test(i int);
 INSERT INTO test SELECT s.id FROM generate_series(1,1000000000) AS s(id);
