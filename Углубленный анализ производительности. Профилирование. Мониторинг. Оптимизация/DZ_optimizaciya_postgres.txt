@@ -144,3 +144,93 @@ ORDER BY total_time DESC LIMIT 20;
  SELECT substring(query, $1, $2) AS short_query, ro |       0.19 |     2 |    3 |     0.10 |          90.93
  show shared_preload_libraries                      |       0.02 |     1 |    0 |     0.02 |           9.07
 (2 rows)
+
+
+#Выполнил профилирование
+postgres=# alter system set log_min_duration_statement = 0;
+ALTER SYSTEM
+postgres=# select pg_reload_conf();
+ pg_reload_conf
+----------------
+ t
+(1 row)
+
+postgres=# show log_min_duration_statement;
+ log_min_duration_statement
+----------------------------
+ 0
+(1 row)
+
+postgres=# select * from test;
+ i
+---
+(0 rows)
+
+postgres=# exit
+
+
+#Выполнил
+sudo DEBIAN_FRONTEND=noninteractive apt install -y pgbadger
+tail /var/log/postgresql/postgresql-14-main.log
+pgbadger /var/log/postgresql/postgresql-14-main.log
+lynx out.html
+
+
+←←←                                                                                                            pgBadger :: PostgreSQL Log Analyzer (p26 of 39)
+
+     * Events
+
+Log levels
+
+Key values
+          + 598 Log entries
+          + Chart
+          + Table
+
+         Type    Count Percentage
+       DETAIL    119   19.90%
+       ERROR     29    4.85%
+       FATAL     132   22.07%
+       HINT      85    14.21%
+       LOG       208   34.78%
+       STATEMENT 23    3.85%
+       WARNING   2     0.33%
+
+
+#Выполнил транзакции с временем
+postgres=# CALL insert_data(1);
+CALL
+Time: 6639.389 ms (00:06.639)
+postgres=# CALL insert_data(0);
+CALL
+Time: 34.498 ms
+
+#проверил параметр shared_buffers
+postgres=# SHOW shared_buffers;
+ shared_buffers
+----------------
+ 128MB
+(1 row)
+
+#проверил параметр work_mem
+postgres=# SHOW work_mem;
+ work_mem
+----------
+ 4MB
+
+#Добавил памяти
+postgres=# SET work_mem TO "256MB";
+SET
+Time: 0.281 ms
+
+postgres=# SHOW work_mem;
+ work_mem
+----------
+ 256MB
+(1 row)
+
+#Выполнил транзакции с временем - время вставки увеличилось (было Time: 6639.389 ms)
+postgres=# CALL insert_data(1);
+CALL
+Time: 6110.516 ms (00:06.111)
+
