@@ -1,0 +1,321 @@
+#Создавал контейнеры без ключча --rm, потому как периодически выбрасывает из сессии ВМ
+docker run -it -p 5551:5432 --name=db1 --hostname=db1 ubuntu:20.04 bash
+docker run -it -p 5552:5432 --name=db2 --hostname=db2 ubuntu:20.04 bash
+
+#установил на обоих контейнерах
+ln -snf /usr/share/zoneinfo/UTC /etc/localtime && echo UTC > /etc/timezone && apt update && apt install -y postgresql postgresql-contrib iputils-ping sudo vim netcat
+
+echo "listen_addresses = '*'" >> /etc/postgresql/12/main/postgresql.conf
+
+# необходимо для pg_rewind
+echo "wal_log_hints = on" >> /etc/postgresql/12/main/postgresql.conf
+--done
+
+#Включаем архив моде
+echo "archive_mode = on" >>  /etc/postgresql/12/main/postgresql.conf
+echo "archive_command = 'test ! -f /archive/%f && cp %p /archive/%f'" >>  /etc/postgresql/12/main/postgresql.conf
+--done
+
+# echo "archive_cleanup_command = 'pg_archivecleanup /archive %r'" >>  /etc/postgresql/12/main/postgresql.conf
+# echo "restore_command = 'cp /archive/%f %p'" >>  /etc/postgresql/12/main/postgresql.conf
+
+
+echo "host replication replica 0.0.0.0/0 md5" >> /etc/postgresql/12/main/pg_hba.conf
+echo "host all rewind 0.0.0.0/0 md5" >> /etc/postgresql/12/main/pg_hba.conf
+
+#здаем папку и даем права 
+mkdir /archive
+chown -R postgres:postgres /archive
+
+-- on host machine
+# db1 - 172.17.0.2
+docker inspect db1 | grep IPAddress 
+# db2 - 172.17.0.3
+docker inspect db2 | grep IPAddress 
+
+
+root@superserver:~# docker inspect db1 | grep IPAddress
+            "SecondaryIPAddresses": null,
+            "IPAddress": "172.17.0.2",
+                    "IPAddress": "172.17.0.2",
+root@superserver:~# docker inspect db2 | grep IPAddress
+            "SecondaryIPAddresses": null,
+            "IPAddress": "172.17.0.3",
+                    "IPAddress": "172.17.0.3",
+
+
+
+-- on first container
+-- check connectivity by sending pings
+ping 172.17.0.3
+
+root@db1:/# ping 172.17.0.3
+PING 172.17.0.3 (172.17.0.3) 56(84) bytes of data.
+64 bytes from 172.17.0.3: icmp_seq=1 ttl=64 time=0.072 ms
+64 bytes from 172.17.0.3: icmp_seq=2 ttl=64 time=0.057 ms
+
+#Запускаем и проверяем кластер
+-- start postgres
+pg_ctlcluster 12 main start
+
+root@db1:/# pg_lsclusters
+Ver Cluster Port Status Owner    Data directory              Log file
+12  main    5432 online postgres /var/lib/postgresql/12/main /var/log/postgresql/postgresql-12-main.log
+
+#СОздаем пользователей для replica и rewind
+-- create replica and rewind users with password test123
+sudo -u postgres psql -c "CREATE USER replica with replication encrypted password 'test123'"
+sudo -u postgres psql -c "CREATE USER rewind SUPERUSER encrypted PASSWORD 'test123'"
+
+#Создаем БД в db1
+-- create sample database and fill it 
+sudo -u postgres psql -c "create database sample"
+sudo -u postgres pgbench -i -s 10 sample
+
+dropping old tables...
+NOTICE:  table "pgbench_accounts" does not exist, skipping
+NOTICE:  table "pgbench_branches" does not exist, skipping
+NOTICE:  table "pgbench_history" does not exist, skipping
+NOTICE:  table "pgbench_tellers" does not exist, skipping
+creating tables...
+generating data...
+100000 of 1000000 tuples (10%) done (elapsed 0.06 s, remaining 0.57 s)
+200000 of 1000000 tuples (20%) done (elapsed 0.20 s, remaining 0.79 s)
+300000 of 1000000 tuples (30%) done (elapsed 0.32 s, remaining 0.75 s)
+400000 of 1000000 tuples (40%) done (elapsed 0.41 s, remaining 0.62 s)
+500000 of 1000000 tuples (50%) done (elapsed 0.53 s, remaining 0.53 s)
+600000 of 1000000 tuples (60%) done (elapsed 0.62 s, remaining 0.42 s)
+700000 of 1000000 tuples (70%) done (elapsed 0.72 s, remaining 0.31 s)
+800000 of 1000000 tuples (80%) done (elapsed 0.86 s, remaining 0.22 s)
+900000 of 1000000 tuples (90%) done (elapsed 0.99 s, remaining 0.11 s)
+1000000 of 1000000 tuples (100%) done (elapsed 1.07 s, remaining 0.00 s)
+vacuuming...
+creating primary keys...
+done.
+
+
+#Настраиваем контейнер DB2 как реплику
+-- on a second container
+-- cleanup data directory
+sudo -u postgres rm -rf /var/lib/postgresql/12/main
+
+#Проверили доступность порта
+-- ensure first container is listening on expected port
+nc -vz 172.17.0.2 5432
+Connection to 172.17.0.2 5432 port [tcp/postgresql] succeeded!
+
+#Делаем репликацию в дб2
+-- MANUAL restore cluster from master (it will ask for test123 password of replica user)
+-- test123
+sudo -u postgres pg_basebackup --host=172.17.0.2 --port=5432 --username=replica --pgdata=/var/lib/postgresql/12/main/ --progress --write-recovery-conf --create-slot --slot=replica1
+
+--create-slot --slot=replica1
+Password:
+185825/185825 kB (100%), 1/1 tablespace
+
+#Чекпоинт не попросил сделать
+#Из сессии с дб1 выбросило, чекпоинт похоже сделался при завершении сессии.
+
+-- waiting for checkpoint
+-- notes:
+--  it will ask for test123 password of replica user created earlier
+--  it might take some time to backup restore 500mb of data
+--  it will wait for a checkpoint before starting, so run on a master
+sudo -u postgres psql -c "checkpoint" 
+
+Проверим настройкии на дб2
+-- on 2 container
+-- make sure that connection info is saved
+cat /var/lib/postgresql/12/main/postgresql.auto.conf
+
+# Do not edit this file manually!
+# It will be overwritten by the ALTER SYSTEM command.
+primary_conninfo = 'user=replica password=test123 host=172.17.0.2 port=5432 sslmode=prefer sslcompression=0 gssencmode=prefer krbsrvname=postgres target_session_attrs=any'
+primary_slot_name = 'replica1'
+
+-- and that you have standby.signal file in place (existence of this file will force postgres to run as slave)
+
+ls -la /var/lib/postgresql/12/main/ | grep standby
+
+-rw-------  1 postgres postgres    0 May 19 20:59 standby.signal
+
+-- start postgres
+pg_ctlcluster 12 main start
+
+-- and make sure it is up and running - see online,recovery
+pg_lsclusters
+12  main    5432 online,recovery postgres /var/lib/postgresql/12/main /var/log/postgresql/postgresql-12-main.log
+
+#Проверяем репликацию на дб1
+-- on a first container - check replication slots
+sudo -u postgres psql -c "select * from pg_replication_slots"
+ slot_name | plugin | slot_type | datoid | database | temporary | active | active_pid | xmin | catalog_xmin | restart_lsn | confirmed_flush_lsn
+-----------+--------+-----------+--------+----------+-----------+--------+------------+------+--------------+-------------+---------------------
+ replica1  |        | physical  |        |          | f         | t      |       3272 |      |              | 0/B000148   |
+(1 row)
+
+sudo -u postgres psql -c "select * from pg_stat_replication"
+ pid  | usesysid | usename | application_name | client_addr | client_hostname | client_port |         backend_start         | backend_xmin |   state   | sent_lsn
+| write_lsn | flush_lsn | replay_lsn | write_lag | flush_lag | replay_lag | sync_priority | sync_state |          reply_time
+------+----------+---------+------------------+-------------+-----------------+-------------+-------------------------------+--------------+-----------+-----------
++-----------+-----------+------------+-----------+-----------+------------+---------------+------------+-------------------------------
+ 3272 |    16384 | replica | 12/main          | 172.17.0.3  |                 |       60512 | 2022-05-19 21:06:59.637482+00 |              | streaming | 0/B000148
+| 0/B000148 | 0/B000148 | 0/B000148  |           |           |            |             0 | async      | 2022-05-19 21:08:59.860752+00
+(1 row)
+
+#Вставляем таблицу на дб1
+-- lets create table and fill it with some dummy data
+sudo -u postgres psql sample -c "create table messages(message text)"
+sudo -u postgres psql sample -c "insert into messages values('hello')"
+sudo -u postgres psql sample -c "select * from messages"
+ 
+ message
+---------
+ hello
+(1 row)
+
+#Проверяем на дб2
+root@db2:/# sudo -u postgres psql sample -c "select * from messages"
+ message
+---------
+ hello
+(1 row)
+
+
+#Останавливаем репликацию (делаем сплитбрэйн) на дб2
+-- almost immediatelly you should see that table and message on a replica
+-- Failover
+-- on a second container
+-- lets pretend that we lose our master - promote second container as a new master
+sudo pg_ctlcluster 12 main promote
+
+#Сигнал standby пропал
+-- standby file should be removed automatically
+ls -la /var/lib/postgresql/12/main/ | grep standby
+
+
+-- Connection info in postgres.auto.conf will left inact, but it is ok, until there is no standby file
+cat /var/lib/postgresql/12/main/postgresql.auto.conf
+
+#Вставляем в таблицу в дб2
+-- write records now to 2 server
+sudo -u postgres psql sample -c "insert into messages values('world')"
+sudo -u postgres psql sample -c "select * from messages"
+ message
+---------
+ hello
+ world
+(2 rows)
+
+#Вставляем в таблицу в дб1
+-- on a first container - master is still alive and received one more update
+sudo -u postgres psql sample -c "insert into messages values('contoso')"
+sudo -u postgres psql sample -c "select * from messages"
+
+ message
+---------
+ hello
+ contoso
+(2 rows)
+
+
+#Жертвуем дб1
+-- has splitbrain
+-- stop 1 postgres 
+pg_ctlcluster 12 main stop
+
+#Выполняем pg_rewind с дб2 на дб1
+-- rewind
+sudo -u postgres /usr/lib/postgresql/12/bin/pg_rewind --target-pgdata /var/lib/postgresql/12/main --source-server="postgresql://rewind:test123@172.17.0.3:5432/sample" --progress
+
+#ОШИБКУ НЕ ПОЛУЧИЛ
+root@db1:/# sudo -u postgres /usr/lib/postgresql/12/bin/pg_rewind --target-pgdata /var/lib/postgresql/12/main --source-server="postgresql://rewind:test123@172.17.0.3:5432/sample" --progress
+pg_rewind: connected to server
+pg_rewind: servers diverged at WAL location 0/B01E1B8 on timeline 1
+pg_rewind: rewinding from last common checkpoint at 0/B01E108 on timeline 1
+pg_rewind: reading source file list
+pg_rewind: reading target file list
+pg_rewind: reading WAL in target
+pg_rewind: need to copy 53 MB (total source directory size is 228 MB)
+54411/54411 kB (100%) copied
+pg_rewind: creating backup label and updating control file
+pg_rewind: syncing target data directory
+pg_rewind: Done!
+
+
+-- if error
+-- rewind might complain with error like: pg_rewind: error: could not open file "/var/lib/postgresql/12/main/pg_wal/00000001000000000000000A": No such file or directory you gonna need to copy this file from /archive to pg_wal, e.g.:
+
+#ls -la /archive/
+
+root@db1:/# ls -la /archive/
+total 180236
+drwxr-xr-x 2 postgres postgres     4096 May 19 21:22 .
+drwxr-xr-x 1 root     root         4096 May 19 20:37 ..
+-rw------- 1 postgres postgres 16777216 May 19 20:51 000000010000000000000001
+-rw------- 1 postgres postgres 16777216 May 19 20:51 000000010000000000000002
+-rw------- 1 postgres postgres 16777216 May 19 20:51 000000010000000000000003
+-rw------- 1 postgres postgres 16777216 May 19 20:51 000000010000000000000004
+-rw------- 1 postgres postgres 16777216 May 19 20:51 000000010000000000000005
+-rw------- 1 postgres postgres 16777216 May 19 20:51 000000010000000000000006
+-rw------- 1 postgres postgres 16777216 May 19 20:51 000000010000000000000007
+-rw------- 1 postgres postgres 16777216 May 19 20:51 000000010000000000000008
+-rw------- 1 postgres postgres 16777216 May 19 20:59 000000010000000000000009
+-rw------- 1 postgres postgres 16777216 May 19 20:59 00000001000000000000000A
+-rw------- 1 postgres postgres      337 May 19 20:59 00000001000000000000000A.00000028.backup
+-rw------- 1 postgres postgres 16777216 May 19 21:22 00000001000000000000000B
+
+----------------------------------------------
+#-- Не выполнял
+
+cp /archive/00000001000000000000000A /var/lib/postgresql/12/main/pg_wal/
+chown postgres:postgres /var/lib/postgresql/12/main/pg_wal/00000001000000000000000A
+sudo -u postgres /usr/lib/postgresql/12/bin/pg_rewind --target-pgdata /var/lib/postgresql/12/main --source-server="postgresql://rewind:test123@172.17.0.3:5432/sample" --progress
+-- now, when we rewinded lets make it slave
+----------------------------------------------
+
+#Прописываем standby.signal на дб1
+-- create standy signal
+touch /var/lib/postgresql/12/main/standby.signal
+
+-- and add replication info
+
+#Устанавливаем коннект с дб2
+echo "primary_conninfo = 'user=replica password=test123 host=172.17.0.3 port=5432 sslmode=prefer sslcompression=0 gssencmode=prefer krbsrvname=postgres target_session_attrs=any'" >> /var/lib/postgresql/12/main/postgresql.auto.conf
+
+-- adding another relication slot
+echo "primary_slot_name = 'replica2'" >> /var/lib/postgresql/12/main/postgresql.auto.conf
+
+
+#На дб2 создаем слот и проверяем 
+-- create slot on new master
+-- 2 container
+
+sudo -u postgres psql -c "select * from pg_create_physical_replication_slot('replica2')"
+ slot_name | lsn
+-----------+-----
+ replica2  |
+(1 row)
+
+sudo -u postgres psql -c "select * from pg_replication_slots"
+ slot_name | plugin | slot_type | datoid | database | temporary | active | active_pid | xmin | catalog_xmin | restart_lsn | confirmed_flush_lsn
+-----------+--------+-----------+--------+----------+-----------+--------+------------+------+--------------+-------------+---------------------
+ replica2  |        | physical  |        |          | f         | f      |            |      |              |             |
+(1 row)
+
+
+-- start postgres on 1 container
+pg_ctlcluster 12 main start
+
+pg_lsclusters
+
+-- check that data is synced
+sudo -u postgres psql sample -c "select * from messages"
+
+root@db1:/# sudo -u postgres psql sample -c "select * from messages"
+ message
+---------
+ hello
+ world
+(2 rows)
+
