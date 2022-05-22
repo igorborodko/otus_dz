@@ -1,0 +1,66 @@
+
+#Создавал контейнеры
+docker run -it -p 2379:2379 -d --net=my_bridge --name=etcd1 --hostname=etcd1 ubuntu:20.04
+docker run -it -p 2378:2379 -d --net=my_bridge --name=etcd2 --hostname=etcd2 ubuntu:20.04
+docker run -it -p 2377:2379 -d --net=my_bridge --name=etcd3 --hostname=etcd3 ubuntu:20.04
+
+#Проверил
+root@superserver:~# docker network inspect my_bridge
+...
+ "109c55f6d2284843e82066488d434c6c25bc69446bed607a01c5af23ad7ed472": {
+                "Name": "etcd1",
+                "EndpointID": "e4a8e03014ea38da7565e8179f66c17c27c6c3a07c31e6083fd79ac7ff304d60",
+                "MacAddress": "02:42:ac:13:00:02",
+                "IPv4Address": "172.19.0.2/16",
+                "IPv6Address": ""
+            },
+            "859797555a9bb77d19184acf9af8518586eb358eaae14a31f8060100c5d5f089": {
+                "Name": "etcd2",
+                "EndpointID": "a689de06255d5e915eb82a8ebce3d0e4756669cb0906ccb57d7ba1a590811368",
+                "MacAddress": "02:42:ac:13:00:03",
+                "IPv4Address": "172.19.0.3/16",
+                "IPv6Address": ""
+            },
+            "8c9be5c87b1abd10938db6286dda6dba675a7a3488b8bb5e15b41dc687ba3076": {
+                "Name": "etcd3",
+                "EndpointID": "99bf96c965eee5e74e25eee47d3e5bc6455f4db36934384b80208a85a2f447dd",
+                "MacAddress": "02:42:ac:13:00:04",
+                "IPv4Address": "172.19.0.4/16",
+                "IPv6Address": ""
+
+...
+
+#Установил на 3х контейнерах
+apt update -y && apt install -y systemd sudo iputils-ping netcat
+
+#Проверил пинги со всех контейнеров
+root@etcd1:/# ping 172.19.0.2
+PING 172.19.0.2 (172.19.0.2) 56(84) bytes of data.
+64 bytes from 172.19.0.2: icmp_seq=1 ttl=64 time=0.026 ms
+64 bytes from 172.19.0.2: icmp_seq=2 ttl=64 time=0.016 ms
+64 bytes from 172.19.0.2: icmp_seq=3 ttl=64 time=0.013 ms
+^C
+--- 172.19.0.2 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2026ms
+rtt min/avg/max/mdev = 0.013/0.018/0.026/0.005 ms
+root@etcd1:/# ping 172.19.0.3
+PING 172.19.0.3 (172.19.0.3) 56(84) bytes of data.
+64 bytes from 172.19.0.3: icmp_seq=1 ttl=64 time=0.078 ms
+64 bytes from 172.19.0.3: icmp_seq=2 ttl=64 time=0.064 ms
+
+
+#Выполнил 
+sudo dpkg --configure -a
+sudo apt install -y etcd
+
+#проверим, что c etcd
+root@etcd1:/# hostname; ps -aef | grep etcd | grep -v grep
+etcd1
+
+root@etcd1:/# systemctl is-enabled etcd
+enabled
+
+#Останавливаю - получаю ошибку:
+root@etcd1:/# sudo systemctl stop etcd
+System has not been booted with systemd as init system (PID 1). Can't operate.
+Failed to connect to bus: Host is down
