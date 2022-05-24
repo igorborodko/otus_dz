@@ -123,3 +123,27 @@ house@etcd1:/var/lib/etcd$ systemctl status etcd.service
 
 #journalctl так же ничего не показал
 house@etcd1:/usr/bin$ journalctl -u etcd.service -l --no-pager|less
+
+
+
+#error -- Failed to start etcd - highly-available key value store.
+
+house@etcd1:/var/lib/etcd/default/member$ sudo systemctl status etcd.service
+● etcd.service - etcd - highly-available key value store
+     Loaded: loaded (/lib/systemd/system/etcd.service; enabled; vendor preset: enabled)
+     Active: failed (Result: exit-code) since Tue 2022-05-24 21:34:59 UTC; 31s ago
+       Docs: https://github.com/coreos/etcd
+             man:etcd
+    Process: 8786 ExecStart=/usr/bin/etcd $DAEMON_ARGS (code=exited, status=1/FAILURE)
+   Main PID: 8786 (code=exited, status=1/FAILURE)
+
+May 24 21:34:59 etcd1 etcd[8786]: setting maximum number of CPUs to 2, total number of available CPUs is 2
+May 24 21:34:59 etcd1 etcd[8786]: found invalid file/dir default under data dir /var/lib/etcd (Ignore this if you are upgrading etcd)
+May 24 21:34:59 etcd1 etcd[8786]: the server is already initialized as member before, starting as etcd member...
+May 24 21:34:59 etcd1 etcd[8786]: listening for peers on http://0.0.0.0:2380
+May 24 21:34:59 etcd1 etcd[8786]: listening for client requests on 0.0.0.0:2379
+May 24 21:34:59 etcd1 etcd[8786]: resolving etcd1:2380 to 127.0.1.1:2380
+May 24 21:34:59 etcd1 etcd[8786]: --initial-cluster must include etcd1=http://etcd1:2380 given --initial-advertise-peer-urls=http://etcd1:2380
+May 24 21:34:59 etcd1 systemd[1]: etcd.service: Main process exited, code=exited, status=1/FAILURE
+May 24 21:34:59 etcd1 systemd[1]: etcd.service: Failed with result 'exit-code'.
+May 24 21:34:59 etcd1 systemd[1]: Failed to start etcd - highly-available key value store.
