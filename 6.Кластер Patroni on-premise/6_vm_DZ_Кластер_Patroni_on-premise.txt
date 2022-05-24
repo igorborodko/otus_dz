@@ -1,0 +1,125 @@
+#Разворачиваю в яндекс клауде
+-----------------------------
+
+#внутренние ip
+10.129.0.14 etcd1
+10.129.0.18 etcd2
+10.129.0.3  etcd3
+
+
+#на трех машинах установил etcd
+sudo apt update && sudo apt upgrade -y && sudo apt install -y etcd
+
+
+#-- проверим, что c etcd
+house@etcd1:~$ hostname; ps -aef | grep etcd | grep -v grep
+etcd1
+etcd        7838       1  0 19:11 ?        00:00:01 /usr/bin/etcd
+
+house@etcd2:~$ hostname; ps -aef | grep etcd | grep -v grep
+etcd2
+etcd        7782       1  0 19:12 ?        00:00:01 /usr/bin/etcd
+
+house@etcd3:~$ hostname; ps -aef | grep etcd | grep -v grep
+etcd3
+etcd        7878       1  0 19:11 ?        00:00:01 /usr/bin/etcd
+
+#Остановил етсд на 3 хостах 
+sudo systemctl stop etcd
+
+
+#-- добавим в файлы с конфигами /etc/default/etcd:
+#--  DNS нет, ставлю внутренние IP адреса
+
+
+cat > temp.cfg << EOF 
+ETCD_NAME="$(hostname)"
+ETCD_LISTEN_CLIENT_URLS="http://0.0.0.0:2379"
+ETCD_ADVERTISE_CLIENT_URLS="http://$(hostname):2379"
+ETCD_LISTEN_PEER_URLS="http://0.0.0.0:2380"
+ETCD_INITIAL_ADVERTISE_PEER_URLS="http://$(hostname):2380"
+ETCD_INITIAL_CLUSTER_TOKEN="PatroniCluster"
+ETCD_INITIAL_CLUSTER="etcd1=http://10.129.0.14:2380,etcd2=http://10.129.0.18:2380,etcd3=http://10.129.0.3:2380"
+ETCD_INITIAL_CLUSTER_STATE="new"
+ETCD_DATA_DIR="/var/lib/etcd"
+EOF
+cat temp.cfg | sudo tee -a /etc/default/etcd
+
+#error
+house@etcd1:~$ sudo systemctl start etcd
+Job for etcd.service failed because the control process exited with error code.
+See "systemctl status etcd.service" and "journalctl -xe" for details.
+
+#проверил
+house@etcd1:~$ systemctl status etcd.service
+● etcd.service - etcd - highly-available key value store
+     Loaded: loaded (/lib/systemd/system/etcd.service; enabled; vendor preset: enabled)
+     Active: failed (Result: exit-code) since Tue 2022-05-24 20:26:19 UTC; 46s ago
+       Docs: https://github.com/coreos/etcd
+             man:etcd
+    Process: 8340 ExecStart=/usr/bin/etcd $DAEMON_ARGS (code=exited, status=1/FAILURE)
+   Main PID: 8340 (code=exited, status=1/FAILURE)
+
+----
+
+#nano/lib/systemd/system/etcd.service
+nano/lib/systemd/system/etcd.service
+[Unit]
+Description=etcd - highly-available key value store
+Documentation=https://github.com/coreos/etcd
+Documentation=man:etcd
+After=network.target
+Wants=network-online.target
+
+[Service]
+Environment=DAEMON_ARGS=
+Environment=ETCD_NAME=%H
+Environment=ETCD_DATA_DIR=/var/lib/etcd/default
+EnvironmentFile=-/etc/default/%p
+Type=notify
+User=etcd
+PermissionsStartOnly=true
+#ExecStart=/bin/sh -c "GOMAXPROCS=$(nproc) /usr/bin/etcd $DAEMON_ARGS"
+ExecStart=/usr/bin/etcd $DAEMON_ARGS
+Restart=on-abnormal
+#RestartSec=10s
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+Alias=etcd2.service
+
+----
+
+#проверил /etc/default/etcd
+house@etcd1:/etc/default$ nano /etc/default/etcd
+ETCD_NAME="etcd1"
+ETCD_LISTEN_CLIENT_URLS="http://0.0.0.0:2379"
+ETCD_ADVERTISE_CLIENT_URLS="http://etcd1:2379"
+ETCD_LISTEN_PEER_URLS="http://0.0.0.0:2380"
+ETCD_INITIAL_ADVERTISE_PEER_URLS="http://etcd1:2380"
+ETCD_INITIAL_CLUSTER_TOKEN="PatroniCluster"
+ETCD_INITIAL_CLUSTER="etcd1=http://10.129.0.14:2380,etcd2=http://10.129.0.18:2380,etcd3=http://10.129.0.3:2380"
+ETCD_INITIAL_CLUSTER_STATE="new"
+ETCD_DATA_DIR="/var/lib/etcd"
+
+
+#процесса данного не нахожу командой ниже
+house@etcd1:/var/lib/etcd$ ps -efL
+
+#Выдал права 
+house@etcd1:/var/lib/etcd$ sudo chmod 777 /var/lib/etcd/
+
+#Process: 8340 поменялся на 8466 (8466 тоже не нашел в процессах)
+house@etcd1:/var/lib/etcd$ systemctl status etcd.service
+● etcd.service - etcd - highly-available key value store
+     Loaded: loaded (/lib/systemd/system/etcd.service; enabled; vendor preset: enabled)
+     Active: failed (Result: exit-code) since Tue 2022-05-24 20:49:08 UTC; 8min ago
+       Docs: https://github.com/coreos/etcd
+             man:etcd
+    Process: 8466 ExecStart=/usr/bin/etcd $DAEMON_ARGS (code=exited, status=1/FAILURE)
+   Main PID: 8466 (code=exited, status=1/FAILURE)
+
+
+#journalctl так же ничего не показал
+house@etcd1:/usr/bin$ journalctl -u etcd.service -l --no-pager|less
