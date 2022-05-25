@@ -1,0 +1,520 @@
+#Разворачиваю в яндекс клауде
+-----------------------------
+
+#внутренние ip
+10.129.0.14 etcd1
+10.129.0.18 etcd2
+10.129.0.3  etcd3
+
+
+#на трех машинах установил
+sudo apt update && sudo apt upgrade -y && sudo apt install -y etcd
+
+
+#-- проверим, что c etcd
+house@etcd1:~$ hostname; ps -aef | grep etcd | grep -v grep
+etcd1
+etcd        7838       1  0 19:11 ?        00:00:01 /usr/bin/etcd
+
+house@etcd2:~$ hostname; ps -aef | grep etcd | grep -v grep
+etcd2
+etcd        7782       1  0 19:12 ?        00:00:01 /usr/bin/etcd
+
+house@etcd3:~$ hostname; ps -aef | grep etcd | grep -v grep
+etcd3
+etcd        7878       1  0 19:11 ?        00:00:01 /usr/bin/etcd
+
+#Остановил етсд на 3 хостах 
+sudo systemctl stop etcd
+
+
+#-- добавим в файлы с конфигами /etc/default/etcd:
+#--  DNS нет, ставлю внутренние IP адреса
+
+
+cat > temp.cfg << EOF 
+ETCD_NAME="$(hostname)"
+ETCD_LISTEN_CLIENT_URLS="http://0.0.0.0:2379"
+ETCD_ADVERTISE_CLIENT_URLS="http://$(hostname):2379"
+ETCD_LISTEN_PEER_URLS="http://0.0.0.0:2380"
+ETCD_INITIAL_ADVERTISE_PEER_URLS="http://$(hostname):2380"
+ETCD_INITIAL_CLUSTER_TOKEN="PatroniCluster"
+ETCD_INITIAL_CLUSTER="etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380"
+ETCD_INITIAL_CLUSTER_STATE="new"
+ETCD_DATA_DIR="/var/lib/etcd"
+EOF
+cat temp.cfg | sudo tee -a /etc/default/etcd
+
+#error
+house@etcd1:~$ sudo systemctl start etcd
+Job for etcd.service failed because the control process exited with error code.
+See "systemctl status etcd.service" and "journalctl -xe" for details.
+
+#проверил
+house@etcd1:~$ systemctl status etcd.service
+● etcd.service - etcd - highly-available key value store
+     Loaded: loaded (/lib/systemd/system/etcd.service; enabled; vendor preset: enabled)
+     Active: failed (Result: exit-code) since Tue 2022-05-24 20:26:19 UTC; 46s ago
+       Docs: https://github.com/coreos/etcd
+             man:etcd
+    Process: 8340 ExecStart=/usr/bin/etcd $DAEMON_ARGS (code=exited, status=1/FAILURE)
+   Main PID: 8340 (code=exited, status=1/FAILURE)
+
+----
+
+#nano/lib/systemd/system/etcd.service
+nano/lib/systemd/system/etcd.service
+[Unit]
+Description=etcd - highly-available key value store
+Documentation=https://github.com/coreos/etcd
+Documentation=man:etcd
+After=network.target
+Wants=network-online.target
+
+[Service]
+Environment=DAEMON_ARGS=
+Environment=ETCD_NAME=%H
+Environment=ETCD_DATA_DIR=/var/lib/etcd/default
+EnvironmentFile=-/etc/default/%p
+Type=notify
+User=etcd
+PermissionsStartOnly=true
+#ExecStart=/bin/sh -c "GOMAXPROCS=$(nproc) /usr/bin/etcd $DAEMON_ARGS"
+ExecStart=/usr/bin/etcd $DAEMON_ARGS
+Restart=on-abnormal
+#RestartSec=10s
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+Alias=etcd2.service
+
+----
+
+#проверил /etc/default/etcd
+house@etcd1:/etc/default$sudo nano /etc/default/etcd
+ETCD_NAME="etcd1"
+ETCD_LISTEN_CLIENT_URLS="http://0.0.0.0:2379"
+ETCD_ADVERTISE_CLIENT_URLS="http://etcd1:2379"
+ETCD_LISTEN_PEER_URLS="http://0.0.0.0:2380"
+ETCD_INITIAL_ADVERTISE_PEER_URLS="http://etcd1:2380"
+ETCD_INITIAL_CLUSTER_TOKEN="PatroniCluster"
+ETCD_INITIAL_CLUSTER="etcd1=http://10.129.0.14:2380,etcd2=http://10.129.0.18:2380,etcd3=http://10.129.0.3:2380"
+ETCD_INITIAL_CLUSTER_STATE="new"
+ETCD_DATA_DIR="/var/lib/etcd"
+
+
+#процесса данного в ошибке не нахожу командой ниже
+house@etcd1:/var/lib/etcd$ ps -efL
+
+#Выдал права 
+house@etcd1:/var/lib/etcd$ sudo chmod 777 /var/lib/etcd/
+
+#Process: 8340 поменялся на 8466 (8466 тоже не нашел в процессах)
+house@etcd1:/var/lib/etcd$ systemctl status etcd.service
+● etcd.service - etcd - highly-available key value store
+     Loaded: loaded (/lib/systemd/system/etcd.service; enabled; vendor preset: enabled)
+     Active: failed (Result: exit-code) since Tue 2022-05-24 20:49:08 UTC; 8min ago
+       Docs: https://github.com/coreos/etcd
+             man:etcd
+    Process: 8466 ExecStart=/usr/bin/etcd $DAEMON_ARGS (code=exited, status=1/FAILURE)
+   Main PID: 8466 (code=exited, status=1/FAILURE)
+
+
+#journalctl ак же ничего не показал
+house@etcd1:/usr/bin$ journalctl -u etcd.service -l --no-pager|less
+
+#sudo systemctl status etcd.service
+house@etcd1:/var/lib/etcd/default/member$ sudo systemctl status etcd.service
+● etcd.service - etcd - highly-available key value store
+     Loaded: loaded (/lib/systemd/system/etcd.service; enabled; vendor preset: enabled)
+     Active: failed (Result: exit-code) since Tue 2022-05-24 21:34:59 UTC; 31s ago
+       Docs: https://github.com/coreos/etcd
+             man:etcd
+    Process: 8786 ExecStart=/usr/bin/etcd $DAEMON_ARGS (code=exited, status=1/FAILURE)
+   Main PID: 8786 (code=exited, status=1/FAILURE)
+
+May 24 21:34:59 etcd1 etcd[8786]: setting maximum number of CPUs to 2, total number of available CPUs is 2
+May 24 21:34:59 etcd1 etcd[8786]: found invalid file/dir default under data dir /var/lib/etcd (Ignore this if you are upgrading etcd)
+May 24 21:34:59 etcd1 etcd[8786]: the server is already initialized as member before, starting as etcd member...
+May 24 21:34:59 etcd1 etcd[8786]: listening for peers on http://0.0.0.0:2380
+May 24 21:34:59 etcd1 etcd[8786]: listening for client requests on 0.0.0.0:2379
+May 24 21:34:59 etcd1 etcd[8786]: resolving etcd1:2380 to 127.0.1.1:2380
+May 24 21:34:59 etcd1 etcd[8786]: --initial-cluster must include etcd1=http://etcd1:2380 given --initial-advertise-peer-urls=http://etcd1:2380
+May 24 21:34:59 etcd1 systemd[1]: etcd.service: Main process exited, code=exited, status=1/FAILURE
+
+
+
+
+--------------------------------------------------
+#прописал ДНС
+house@etcd1:~$ ping etcd2
+PING etcd2.ru-central1.internal (10.129.0.18) 56(84) bytes of data.
+64 bytes from etcd2.ru-central1.internal (10.129.0.18): icmp_seq=1 ttl=63 time=0.876 ms
+64 bytes from etcd2.ru-central1.internal (10.129.0.18): icmp_seq=2 ttl=63 time=0.227 ms
+64 bytes from etcd2.ru-central1.internal (10.129.0.18): icmp_seq=3 ttl=63 time=0.246 ms
+
+#-- добавим в файлы с конфигами /etc/default/etcd:
+
+cat > temp.cfg << EOF 
+ETCD_NAME="$(hostname)"
+ETCD_LISTEN_CLIENT_URLS="http://0.0.0.0:2379"
+ETCD_ADVERTISE_CLIENT_URLS="http://$(hostname):2379"
+ETCD_LISTEN_PEER_URLS="http://0.0.0.0:2380"
+ETCD_INITIAL_ADVERTISE_PEER_URLS="http://$(hostname):2380"
+ETCD_INITIAL_CLUSTER_TOKEN="PatroniCluster"
+ETCD_INITIAL_CLUSTER="etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380"
+ETCD_INITIAL_CLUSTER_STATE="new"
+ETCD_DATA_DIR="/var/lib/etcd"
+EOF
+cat temp.cfg | sudo tee -a /etc/default/etcd
+
+
+house@etcd1:~$ sudo systemctl start etcd
+Job for etcd.service failed because a timeout was exceeded.
+See "systemctl status etcd.service" and "journalctl -xe" for details.
+
+#етсд запущен
+house@etcd1:~$ sudo systemctl status etcd.service
+● etcd.service - etcd - highly-available key value store
+     Loaded: loaded (/lib/systemd/system/etcd.service; enabled; vendor preset: enabled)
+     Active: activating (start) since Wed 2022-05-25 16:59:01 UTC; 39s ago
+       Docs: https://github.com/coreos/etcd
+             man:etcd
+   Main PID: 1473 (etcd)
+      Tasks: 9 (limit: 2311)
+     Memory: 14.8M
+     CGroup: /system.slice/etcd.service
+             └─1473 /usr/bin/etcd
+
+May 25 16:59:41 etcd1 etcd[1473]: b002db7b0cafd329 [logterm: 1, index: 3] sent MsgVote request to eab9d61982d6d3d1 a>
+May 25 16:59:41 etcd1 etcd[1473]: request sent was ignored (cluster ID mismatch: remote[69360dd6d0f38e60]=a21ae350dd>
+May 25 16:59:41 etcd1 etcd[1473]: request cluster ID mismatch (got a21ae350dd485047 want e83a13f4257f8da8)
+May 25 16:59:41 etcd1 etcd[1473]: request cluster ID mismatch (got a21ae350dd485047 want e83a13f4257f8da8)
+May 25 16:59:41 etcd1 etcd[1473]: request sent was ignored (cluster ID mismatch: peer[69360dd6d0f38e60]=a21ae350dd48>
+May 25 16:59:41 etcd1 etcd[1473]: request sent was ignored (cluster ID mismatch: peer[69360dd6d0f38e60]=a21ae350dd48>
+May 25 16:59:41 etcd1 etcd[1473]: request cluster ID mismatch (got a21ae350dd485047 want e83a13f4257f8da8)
+May 25 16:59:41 etcd1 etcd[1473]: request cluster ID mismatch (got a21ae350dd485047 want e83a13f4257f8da8)
+May 25 16:59:41 etcd1 etcd[1473]: request sent was ignored (cluster ID mismatch: peer[69360dd6d0f38e60]=a21ae350dd48>
+May 25 16:59:41 etcd1 etcd[1473]: request sent was ignored (cluster ID mismatch: peer[69360dd6d0f38e60]=a21ae350dd48>
+
+
+#-- проверка автозагрузки
+house@etcd1:~$ systemctl is-enabled etcd
+enabled
+
+#Но кластер не здоров
+house@etcd1:~$ etcdctl cluster-health
+cluster may be unhealthy: failed to list members
+Error:  client: etcd cluster is unavailable or misconfigured; error #0: dial tcp 127.0.0.1:4001: connect: connection refused
+; error #1: client: endpoint http://127.0.0.1:2379 exceeded header timeout
+
+error #0: dial tcp 127.0.0.1:4001: connect: connection refused
+error #1: client: endpoint http://127.0.0.1:2379 exceeded header timeout
+
+
+#Хотя на 2 и 3 етсд все ок
+house@etcd2:~$ etcdctl cluster-health
+member 9a1f33941721f94d is unreachable: no available published client urls
+member 9df0146dd9068bd2 is healthy: got healthy result from http://etcd3:2379
+member f2aeb69aaf7ffcbf is healthy: got healthy result from http://etcd2:2379
+cluster is healthy
+
+house@etcd3:~$ etcdctl cluster-health
+member 9a1f33941721f94d is unreachable: no available published client urls
+member 9df0146dd9068bd2 is healthy: got healthy result from http://etcd3:2379
+member f2aeb69aaf7ffcbf is healthy: got healthy result from http://etcd2:2379
+cluster is healthy
+
+
+#пересоздал виртуалку, залил все заново - все заработало.
+
+house@etcd1:~$ etcdctl cluster-health
+member 9a1f33941721f94d is healthy: got healthy result from http://etcd1:2379
+member 9df0146dd9068bd2 is healthy: got healthy result from http://etcd3:2379
+member f2aeb69aaf7ffcbf is healthy: got healthy result from http://etcd2:2379
+
+#-- установка: постгрес на 3 ВМ Постгрес
+sudo apt update && sudo apt upgrade -y -q && echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee -a /etc/apt/sources.list.d/pgdg.list && wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add - && sudo apt-get update && sudo apt -y install postgresql-14
+
+#-- убедимся, что кластера Постгреса стартовали
+house@postgres:~$ hostname; pg_lsclusters
+postgres
+Ver Cluster Port Status Owner    Data directory              Log file
+14  main    5432 online postgres /var/lib/postgresql/14/main /var/log/postgresql/postgresql-14-main.log
+
+#-- проверяем доступность
+house@postgres:~$ ping etcd1
+PING etcd1.ru-central1.internal (10.129.0.20) 56(84) bytes of data.
+64 bytes from etcd1.ru-central1.internal (10.129.0.20): icmp_seq=1 ttl=63 time=1.28 ms
+64 bytes from etcd1.ru-central1.internal (10.129.0.20): icmp_seq=2 ttl=63 time=0.484 ms
+
+house@etcd2:~$ ping postgres3
+PING postgres3.ru-central1.internal (10.129.0.35) 56(84) bytes of data.
+64 bytes from postgres3.ru-central1.internal (10.129.0.35): icmp_seq=1 ttl=63 time=0.817 ms
+64 bytes from postgres3.ru-central1.internal (10.129.0.35): icmp_seq=2 ttl=63 time=0.235 ms
+
+
+#-- ставим питон на 1 ноде 
+sudo apt-get install -y python3 python3-pip git mc
+
+
+
+#_____WARNING_____sudo pip3 install psycopg2-binary
+house@postgres:~$ sudo pip3 install psycopg2-binary
+WARNING: Retrying (Retry(total=4, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ReadTimeoutError("HTTPSConnectionPool(host='pypi.org', port=443): Read timed out. (read timeout=15)")': /simple/psycopg2-binary/
+^CERROR: Operation cancelled by user
+
+
+
+
+#Ошибка продолжалась долго, спустя время, пока гуглил решение, попробовал еще раз - установилась(с чем связано!?)
+house@postgres:~$ sudo pip3 install psycopg2-binary
+WARNING: Retrying (Retry(total=4, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ReadTimeoutError("HTTPSConnectionPool(host='pypi.org', port=443): Read timed out. (read timeout=15)")': /simple/psycopg2-binary/
+WARNING: Retrying (Retry(total=3, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ReadTimeoutError("HTTPSConnectionPool(host='pypi.org', port=443): Read timed out. (read timeout=15)")': /simple/psycopg2-binary/
+Collecting psycopg2-binary
+  WARNING: Retrying (Retry(total=4, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ReadTimeoutError("HTTPSConnectionPool(host='files.pythonhosted.org', port=443): Read timed out. (read timeout=15)")': /packages/27/83/5bf62ca29fa23591582188f1b1aa00c4219b4f53cd39e288b8a2e4f5ee92/psycopg2_binary-2.9.3-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+  Downloading psycopg2_binary-2.9.3-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (3.0 MB)
+     |████████████████████████████████| 3.0 MB 1.0 MB/s
+Installing collected packages: psycopg2-binary
+Successfully installed psycopg2-binary-2.9.3
+
+#-- после установки ПО останавливаем и удаляем экземлпяр постгреса который запускается по-умолчанию:
+house@postgres:~$ sudo systemctl stop postgresql@14-main
+house@postgres:~$ sudo -u postgres pg_dropcluster 14 main
+Warning: systemd was not informed about the removed cluster yet. Operations like "service postgresql start" might fail. To fix, run:
+  sudo systemctl daemon-reload
+house@postgres:~$ pg_lsclusters
+Ver Cluster Port Status Owner Data directory Log file
+
+#___WARNING____-- патрони и опять проблемы с коннектом, но в итоге устанавливается.
+
+house@postgres:~$ sudo pip3 install patroni[etcd]
+WARNING: Retrying (Retry(total=4, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ReadTimeoutError("HTTPSConnectionPool(host='pypi.org', port=443): Read timed out. (read timeout=15)")': /simple/patroni/
+WARNING: Retrying (Retry(total=3, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ReadTimeoutError("HTTPSConnectionPool(host='pypi.org', port=443): Read timed out. (read timeout=15)")': /simple/patroni/
+Collecting patroni[etcd]
+  WARNING: Retrying (Retry(total=4, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ReadTimeoutError("HTTPSConnectionPool(host='files.pythonhosted.org', port=443): Read timed out. (read timeout=15)")': /packages/09/d5/f357e426f611e23469c83696ace8a6528a3f37139d82ee42e1977ea70542/patroni-2.1.3-py3-none-any.whl
+  WARNING: Retrying (Retry(total=3, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ReadTimeoutError("HTTPSConnectionPool(host='files.pythonhosted.org', port=443): Read timed out. (read timeout=15)")': /packages/09/d5/f357e426f611e23469c83696ace8a6528a3f37139d82ee42e1977ea70542/patroni-2.1.3-py3-none-any.whl
+  Downloading patroni-2.1.3-py3-none-any.whl (222 kB)
+     |████████████████████████████████| 222 kB 973 kB/s
+Collecting python-dateutil
+  Downloading python_dateutil-2.8.2-py2.py3-none-any.whl (247 kB)
+     |████████████████████████████████| 247 kB 9.5 MB/s
+Requirement already satisfied: PyYAML in /usr/lib/python3/dist-packages (from patroni[etcd]) (5.3.1)
+Requirement already satisfied: urllib3!=1.21,>=1.19.1 in /usr/lib/python3/dist-packages (from patroni[etcd]) (1.25.8)
+Collecting prettytable>=0.7
+  Downloading prettytable-3.3.0-py3-none-any.whl (26 kB)
+Requirement already satisfied: six>=1.7 in /usr/lib/python3/dist-packages (from patroni[etcd]) (1.14.0)
+Collecting ydiff>=1.2.0
+  Downloading ydiff-1.2.tar.gz (42 kB)
+     |████████████████████████████████| 42 kB 2.3 MB/s
+Collecting click>=4.1
+  Downloading click-8.1.3-py3-none-any.whl (96 kB)
+     |████████████████████████████████| 96 kB 7.3 MB/s
+Collecting psutil>=2.0.0
+  Downloading psutil-5.9.1-cp38-cp38-manylinux_2_12_x86_64.manylinux2010_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl (284 kB)
+     |████████████████████████████████| 284 kB 26.2 MB/s
+Collecting python-etcd<0.5,>=0.4.3; extra == "etcd"
+  Downloading python-etcd-0.4.5.tar.gz (37 kB)
+Collecting wcwidth
+  Downloading wcwidth-0.2.5-py2.py3-none-any.whl (30 kB)
+Collecting dnspython>=1.13.0
+  Downloading dnspython-2.2.1-py3-none-any.whl (269 kB)
+     |████████████████████████████████| 269 kB 21.6 MB/s
+Building wheels for collected packages: ydiff, python-etcd
+  Building wheel for ydiff (setup.py) ... done
+  Created wheel for ydiff: filename=ydiff-1.2-py3-none-any.whl size=16631 sha256=6b983d3c33dc3065d3e21860fa2d4309316772394565949b7e31dec26fcfce4f
+  Stored in directory: /root/.cache/pip/wheels/3b/64/6b/1fffe46e533173749dd54bd9cf053291ae9d2bcc53dffba1ff
+  Building wheel for python-etcd (setup.py) ... done
+  Created wheel for python-etcd: filename=python_etcd-0.4.5-py3-none-any.whl size=38500 sha256=6b4677ca575bba80ea3d643f489c72fd10452e5dedc5d3853aa6f4d12f90e3e9
+  Stored in directory: /root/.cache/pip/wheels/10/fa/7a/8ee59bc1789d1a1efffb172d6efbd0d24c5b85ec7ddce32ee4
+Successfully built ydiff python-etcd
+Installing collected packages: python-dateutil, wcwidth, prettytable, ydiff, click, psutil, dnspython, python-etcd, patroni
+Successfully installed click-8.1.3 dnspython-2.2.1 patroni-2.1.3 prettytable-3.3.0 psutil-5.9.1 python-dateutil-2.8.2 python-etcd-0.4.5 wcwidth-0.2.5 ydiff-1.2
+
+#-- делаем симлинк
+sudo ln -s /usr/local/bin/patroni /bin/patroni
+
+
+#пинг для проверки именихостов
+house@postgres:~$ ping etcd1
+PING etcd1.ru-central1.internal (10.129.0.20) 56(84) bytes of data.
+64 bytes from etcd1.ru-central1.internal (10.129.0.20): icmp_seq=1 ttl=63 time=0.580 ms
+
+house@postgres:~$ ping etcd2
+PING etcd2.ru-central1.internal (10.129.0.18) 56(84) bytes of data.
+64 bytes from etcd2.ru-central1.internal (10.129.0.18): icmp_seq=1 ttl=63 time=0.645 ms
+
+house@postgres:~$ ping etcd3
+PING etcd3.ru-central1.internal (10.129.0.3) 56(84) bytes of data.
+64 bytes from etcd3.ru-central1.internal (10.129.0.3): icmp_seq=1 ttl=63 time=0.757 ms
+
+#-- включаем старт сервиса - заменил ИП в restapi и postgresql на 10.129.0.26
+#заменил в етсд hosts: etcd1.ru-central1.internal:2379,etcd2.ru-central1.internal:2379,etcd3.ru-central1.internal:2379
+
+sudo nano /etc/systemd/system/patroni.service
+
+#Error
+house@postgres:~$ sudo -u postgres patroni /etc/patroni.yml
+2022-05-25 19:28:04,332 INFO: Selected new etcd server http://etcd1:2379
+2022-05-25 19:28:04,336 INFO: No PostgreSQL configuration items changed, nothing to reload.
+2022-05-25 19:28:04,342 INFO: Lock owner: None; I am pgsql1
+2022-05-25 19:28:04,347 INFO: trying to bootstrap a new cluster
+2022-05-25 19:28:04,349 ERROR: Exception during execution of long running task bootstrap
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.8/dist-packages/patroni/async_executor.py", line 97, in run
+    wakeup = func(*args) if args else func()
+  File "/usr/local/lib/python3.8/dist-packages/patroni/postgresql/bootstrap.py", line 294, in bootstrap
+    return do_initialize(config.get(method)) and self._postgresql.config.append_pg_hba(pg_hba) \
+  File "/usr/local/lib/python3.8/dist-packages/patroni/postgresql/bootstrap.py", line 81, in _initdb
+    ret = self._postgresql.pg_ctl('initdb', *options)
+  File "/usr/local/lib/python3.8/dist-packages/patroni/postgresql/__init__.py", line 199, in pg_ctl
+    return subprocess.call(pg_ctl + ['-D', self._data_dir] + list(args), **kwargs) == 0
+  File "/usr/lib/python3.8/subprocess.py", line 340, in call
+    with Popen(*popenargs, **kwargs) as p:
+  File "/usr/lib/python3.8/subprocess.py", line 858, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+  File "/usr/lib/python3.8/subprocess.py", line 1704, in _execute_child
+    raise child_exception_type(errno_num, err_msg, err_filename)
+FileNotFoundError: [Errno 2] No such file or directory: 'pg_ctl'
+2022-05-25 19:28:04,358 INFO: removing initialize key after failed attempt to bootstrap the cluster
+Traceback (most recent call last):
+  File "/usr/local/bin/patroni", line 8, in <module>
+    sys.exit(main())
+  File "/usr/local/lib/python3.8/dist-packages/patroni/__main__.py", line 143, in main
+    return patroni_main()
+  File "/usr/local/lib/python3.8/dist-packages/patroni/__main__.py", line 135, in patroni_main
+    abstract_main(Patroni, schema)
+  File "/usr/local/lib/python3.8/dist-packages/patroni/daemon.py", line 100, in abstract_main
+    controller.run()
+  File "/usr/local/lib/python3.8/dist-packages/patroni/__main__.py", line 105, in run
+    super(Patroni, self).run()
+  File "/usr/local/lib/python3.8/dist-packages/patroni/daemon.py", line 59, in run
+    self._run_cycle()
+  File "/usr/local/lib/python3.8/dist-packages/patroni/__main__.py", line 108, in _run_cycle
+    logger.info(self.ha.run_cycle())
+  File "/usr/local/lib/python3.8/dist-packages/patroni/ha.py", line 1503, in run_cycle
+    info = self._run_cycle()
+  File "/usr/local/lib/python3.8/dist-packages/patroni/ha.py", line 1377, in _run_cycle
+    return self.post_bootstrap()
+  File "/usr/local/lib/python3.8/dist-packages/patroni/ha.py", line 1269, in post_bootstrap
+    self.cancel_initialization()
+  File "/usr/local/lib/python3.8/dist-packages/patroni/ha.py", line 1262, in cancel_initialization
+    raise PatroniFatalException('Failed to bootstrap cluster')
+patroni.exceptions.PatroniFatalException: 'Failed to bootstrap cluster'
+
+
+#-- остановим сервисы etcd
+sudo systemctl stop etcd
+
+-- обновим параметры
+cat > temp2.cfg << EOF 
+ETCD_ADVERTISE_CLIENT_URLS="http://$(hostname).ru-central1.internal:2379"
+EOF
+cat temp2.cfg | sudo tee -a /etc/default/etcd
+
+ETCD_ADVERTISE_CLIENT_URLS="http://etcd1.ru-central1.internal:2379"
+...
+
+#___failed___при старте етсд - но работает
+house@etcd1:~$ sudo systemctl start etcd
+Job for etcd.service failed because a timeout was exceeded.
+See "systemctl status etcd.service" and "journalctl -xe" for details.
+house@etcd1:~$ systemctl status etcd.service
+● etcd.service - etcd - highly-available key value store
+     Loaded: loaded (/lib/systemd/system/etcd.service; enabled; vendor preset: enabled)
+     Active: activating (start) since Wed 2022-05-25 19:48:04 UTC; 36s ago
+       Docs: https://github.com/coreos/etcd
+             man:etcd
+   Main PID: 8563 (etcd)
+      Tasks: 10 (limit: 2311)
+     Memory: 10.2M
+     CGroup: /system.slice/etcd.service
+             └─8563 /usr/bin/etcd
+
+house@etcd1:~$ hostname; ps -aef | grep etcd | grep -v grep
+etcd1
+etcd        8592       1  1 19:49 ?        00:00:00 /usr/bin/etcd
+
+
+#На етсд 2 и 3 запустился мгновенно
+
+
+#-- наконец бутстрапим
+
+house@postgres:~$ sudo -u postgres patroni /etc/patroni.yml
+2022-05-25 20:08:58,063 INFO: Selected new etcd server http://etcd3.ru-central1.internal:2379
+2022-05-25 20:08:58,068 INFO: No PostgreSQL configuration items changed, nothing to reload.
+2022-05-25 20:08:58,075 INFO: Lock owner: None; I am pgsql1
+2022-05-25 20:08:58,080 INFO: trying to bootstrap a new cluster
+The files belonging to this database system will be owned by user "postgres".
+This user must also own the server process.
+
+The database cluster will be initialized with locale "en_US.UTF-8".
+The default text search configuration will be set to "english".
+
+Data page checksums are enabled.
+
+creating directory /var/lib/postgresql/14/main ... ok
+creating subdirectories ... ok
+selecting dynamic shared memory implementation ... posix
+selecting default max_connections ... 100
+selecting default shared_buffers ... 128MB
+selecting default time zone ... Etc/UTC
+creating configuration files ... ok
+running bootstrap script ... ok
+performing post-bootstrap initialization ... ok
+syncing data to disk ... ok
+
+initdb: warning: enabling "trust" authentication for local connections
+You can change this by editing pg_hba.conf or using the option -A, or
+--auth-local and --auth-host, the next time you run initdb.
+
+Success. You can now start the database server using:
+
+    /usr/lib/postgresql/14/bin/pg_ctl -D /var/lib/postgresql/14/main -l logfile start
+
+2022-05-25 20:09:01,959 INFO: postmaster pid=18319
+localhost:5432 - no response
+2022-05-25 20:09:01.966 UTC [18319] LOG:  starting PostgreSQL 14.3 (Ubuntu 14.3-1.pgdg20.04+1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 9.4.0-1ubuntu1~20.04.1) 9.4.0, 64-bit
+2022-05-25 20:09:01.966 UTC [18319] LOG:  listening on IPv4 address "127.0.0.1", port 5432
+2022-05-25 20:09:01.969 UTC [18319] LOG:  listening on IPv4 address "10.129.0.26", port 5432
+2022-05-25 20:09:01.972 UTC [18319] LOG:  listening on Unix socket "./.s.PGSQL.5432"
+2022-05-25 20:09:01.983 UTC [18321] LOG:  database system was shut down at 2022-05-25 20:08:58 UTC
+2022-05-25 20:09:01.991 UTC [18319] LOG:  database system is ready to accept connections
+localhost:5432 - accepting connections
+localhost:5432 - accepting connections
+2022-05-25 20:09:02,992 INFO: establishing a new patroni connection to the postgres cluster
+2022-05-25 20:09:03,003 INFO: running post_bootstrap
+2022-05-25 20:09:03,027 WARNING: Could not activate Linux watchdog device: "Can't open watchdog device: [Errno 2] No such file or directory: '/dev/watchdog'"
+2022-05-25 20:09:03,048 INFO: initialized a new cluster
+2022-05-25 20:09:13,041 INFO: no action. I am (pgsql1), the leader with the lock
+2022-05-25 20:09:23,037 INFO: no action. I am (pgsql1), the leader with the lock
+2022-05-25 20:09:33,036 INFO: no action. I am (pgsql1), the leader with the lock
+2022-05-25 20:09:43,034 INFO: no action. I am (pgsql1), the leader with the lock
+2022-05-25 20:09:53,035 INFO: no action. I am (pgsql1), the leader with the lock
+2022-05-25 20:10:03,036 INFO: no action. I am (pgsql1), the leader with the lock
+^C2022-05-25 20:10:12.159 UTC [18319] LOG:  received fast shutdown request
+2022-05-25 20:10:12.168 UTC [18319] LOG:  aborting any active transactions
+2022-05-25 20:10:12.168 UTC [18332] FATAL:  terminating connection due to administrator command
+2022-05-25 20:10:12.171 UTC [18319] LOG:  background worker "logical replication launcher" (PID 18327) exited with exit code 1
+2022-05-25 20:10:12.172 UTC [18322] LOG:  shutting down
+2022-05-25 20:10:12.199 UTC [18319] LOG:  database system is shut down
+
+
+house@postgres:~$ sudo systemctl enable patroni
+Created symlink /etc/systemd/system/multi-user.target.wants/patroni.service → /etc/systemd/system/patroni.service.
+
+
+house@postgres:~$ sudo systemctl is-enabled patroni
+enabled
+house@postgres:~$ sudo systemctl enable patroni
+house@postgres:~$ sudo systemctl start patroni
+house@postgres:~$ sudo systemctl stop patroni
+house@postgres:~$ sudo systemctl start patroni
+house@postgres:~$ sudo patronictl -c /etc/patroni.yml list
++--------+-------------+--------+---------+----+-----------+
+| Member | Host        | Role   | State   | TL | Lag in MB |
++ Cluster: patroni (7101768530942875526) -+----+-----------+
+| pgsql1 | 10.129.0.26 | Leader | running |  3 |           |
++--------+-------------+--------+---------+----+-----------+
