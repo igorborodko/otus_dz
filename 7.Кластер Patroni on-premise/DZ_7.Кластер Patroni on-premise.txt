@@ -518,3 +518,4 @@ house@postgres:~$ sudo patronictl -c /etc/patroni.yml list
 + Cluster: patroni (7101768530942875526) -+----+-----------+
 | pgsql1 | 10.129.0.26 | Leader | running |  3 |           |
 +--------+-------------+--------+---------+----+-----------+
+видео 1.21
