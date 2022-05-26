@@ -60,6 +60,9 @@ house@etcd1:~$ systemctl status etcd.service
     Process: 8340 ExecStart=/usr/bin/etcd $DAEMON_ARGS (code=exited, status=1/FAILURE)
    Main PID: 8340 (code=exited, status=1/FAILURE)
 
+
+
+
 ----
 
 #nano/lib/systemd/system/etcd.service
@@ -233,6 +236,16 @@ house@etcd1:~$ etcdctl cluster-health
 member 9a1f33941721f94d is healthy: got healthy result from http://etcd1:2379
 member 9df0146dd9068bd2 is healthy: got healthy result from http://etcd3:2379
 member f2aeb69aaf7ffcbf is healthy: got healthy result from http://etcd2:2379
+
+#
+#
+#
+#
+#
+#
+#
+
+
 
 #-- установка: постгрес на 3 ВМ Постгрес
 sudo apt update && sudo apt upgrade -y -q && echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee -a /etc/apt/sources.list.d/pgdg.list && wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add - && sudo apt-get update && sudo apt -y install postgresql-14
@@ -518,4 +531,221 @@ house@postgres:~$ sudo patronictl -c /etc/patroni.yml list
 + Cluster: patroni (7101768530942875526) -+----+-----------+
 | pgsql1 | 10.129.0.26 | Leader | running |  3 |           |
 +--------+-------------+--------+---------+----+-----------+
-видео 1.21
+
+
+
+#-- on 2 & 3 nodes
+
+sudo apt install -y python3 python3-pip git mc && sudo pip3 install psycopg2-binary && sudo systemctl stop postgresql@14-main && sudo -u postgres pg_dropcluster 14 main && sudo pip3 install patroni[etcd] && sudo ln -s /usr/local/bin/patroni /bin/patroni
+
+#2 нода установилась без проблем
+
+#При установке на 3 ноде была ошибка как началась установка psycopg2-binary
+WARNING: Retrying (Retry(total=4, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ReadTimeoutError("HTTPSConnectionPool(host='pypi.org', port=443): Read timed out. (read timeout=15)")': /simple/psycopg2-binary/
+^CERROR: Operation cancelled by user
+
+#В итоге пострес умер, удалил его и переустановил.
+После все ок.
+
+house@postgres2:~$ sudo patronictl -c /etc/patroni.yml list
++-----------+-------------+---------+---------+----+-----------+
+| Member    | Host        | Role    | State   | TL | Lag in MB |
++ Cluster: patroni (7101768530942875526) -----+----+-----------+
+| pgsql1    | 10.129.0.26 | Leader  | running |  4 |           |
+| postgres2 | 10.129.0.10 | Replica | running |  4 |         0 |
+| postgres3 | 10.129.0.35 | Replica | running |  4 |         0 |
++-----------+-------------+---------+---------+----+-----------+
+
+
+#-- изменить параметры кластера 3 НОДЫ
+
+house@postgres3:~$ sudo patronictl -c /etc/patroni.yml edit-config
+---
++++
+@@ -2,7 +2,8 @@
+ max_connections: 105
+ maximum_lag_on_failover: 1048576
+ postgresql:
+-  parameters: null
++  parameters:
++   max_connections: 105
+   use_pg_rewind: true
+ retry_timeout: 10
+ ttl: 30
+
+Apply these changes? [y/N]: y
+Configuration changed
+
+house@postgres3:~$ sudo patronictl -c /etc/patroni.yml restart patroni
++-----------+-------------+---------+---------+----+-----------+-----------------+
+| Member    | Host        | Role    | State   | TL | Lag in MB | Pending restart |
++ Cluster: patroni (7101768530942875526) -----+----+-----------+-----------------+
+| pgsql1    | 10.129.0.26 | Leader  | running |  4 |           | *               |
+| postgres2 | 10.129.0.10 | Replica | running |  4 |         0 | *               |
+| postgres3 | 10.129.0.35 | Replica | running |  4 |         0 | *               |
++-----------+-------------+---------+---------+----+-----------+-----------------+
+When should the restart take place (e.g. 2022-05-26T19:46)  [now]:
+Are you sure you want to restart members pgsql1, postgres2, postgres3? [y/N]: y
+Restart if the PostgreSQL version is less than provided (e.g. 9.5.2)  []:
+Success: restart on member pgsql1
+Success: restart on member postgres2
+Success: restart on member postgres3
+
+
+house@postgres3:~$ sudo -u postgres psql -h localhost
+psql (14.3 (Ubuntu 14.3-1.pgdg20.04+1))
+Type "help" for help.
+
+postgres=# show max_connections;
+ max_connections
+-----------------
+ 105
+(1 row)
+
+postgres=#
+
+
+#Проверил на 1 ноде ОК
+house@postgres:~$ sudo patronictl -c /etc/patroni.yml edit-config
+Not changed
+house@postgres:~$ sudo -u postgres psql -h localhost
+psql (14.3 (Ubuntu 14.3-1.pgdg20.04+1))
+Type "help" for help.
+
+postgres=# show max_connections;
+ max_connections
+-----------------
+ 105
+(1 row)
+
+postgres=#
+
+
+#Уронил патрони. Остановил на 1 ноде
+house@postgres:~$ sudo systemctl stop patroni
+
+house@postgres3:~$ sudo patronictl -c /etc/patroni.yml list
++-----------+-------------+---------+---------+----+-----------+
+| Member    | Host        | Role    | State   | TL | Lag in MB |
++ Cluster: patroni (7101768530942875526) -----+----+-----------+
+| pgsql1    | 10.129.0.26 | Replica | stopped |    |   unknown |
+| postgres2 | 10.129.0.10 | Leader  | running |  5 |           |
+| postgres3 | 10.129.0.35 | Replica | running |  4 |         0 |
++-----------+-------------+---------+---------+----+-----------+
+
+house@postgres:~$ sudo systemctl start patroni
+
+house@postgres3:~$ sudo patronictl -c /etc/patroni.yml list
++-----------+-------------+---------+---------+----+-----------+
+| Member    | Host        | Role    | State   | TL | Lag in MB |
++ Cluster: patroni (7101768530942875526) -----+----+-----------+
+| pgsql1    | 10.129.0.26 | Replica | running |  4 |         0 |
+| postgres2 | 10.129.0.10 | Leader  | running |  5 |           |
+| postgres3 | 10.129.0.35 | Replica | running |  5 |         0 |
++-----------+-------------+---------+---------+----+-----------+
+
+
+#
+|
+|
+# 7 часть
+|
+|
+#
+
+#Создаем базу - проверил на реплике, создалась.
+house@postgres2:~$ sudo -u postgres  psql -h localhost
+
+postgres=# create database otus;
+CREATE DATABASE
+postgres=# \l
+                                  List of databases
+   Name    |  Owner   | Encoding |   Collate   |    Ctype    |   Access privileges
+-----------+----------+----------+-------------+-------------+-----------------------
+ otus      | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 |
+ postgres  | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 |
+ template0 | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | =c/postgres          +
+           |          |          |             |             | postgres=CTc/postgres
+ template1 | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | =c/postgres          +
+           |          |          |             |             | postgres=CTc/postgres
+(4 rows)
+
+
+
+#-- установим pg_bouncer на каждом хосте с Патрони
+
+sudo apt install -y pgbouncer
+
+#зальем конфиг на 3 ноды
+cat > temp3.cfg << EOF 
+[databases]
+otus = host=127.0.0.1 port=5432 dbname=otus 
+[pgbouncer]
+logfile = /var/log/postgresql/pgbouncer.log
+pidfile = /var/run/postgresql/pgbouncer.pid
+listen_addr = *
+listen_port = 6432
+auth_type = md5
+auth_file = /etc/pgbouncer/userlist.txt
+admin_users = admindb
+EOF
+cat temp3.cfg | sudo tee -a /etc/pgbouncer/pgbouncer.ini
+
+
+#зальем конфиг на 3 ноды
+cat > temp4.cfg << EOF 
+"admindb" "d9cfab6a2f1a0eb0c037e605cd578025"
+EOF
+cat temp4.cfg | sudo tee -a /etc/pgbouncer/userlist.txt
+
+#pgbouncer уже был запущен на 3 ноды
+house@postgres:~$ sudo systemctl status pgbouncer
+● pgbouncer.service - pgbouncer PostgreSQL connection pooler
+     Loaded: loaded (/lib/systemd/system/pgbouncer.service; enabled; vendor preset: enabled)
+     Active: active (running) since Thu 2022-05-26 20:51:13 UTC; 21min ago
+   Main PID: 2175 (pgbouncer)
+     Status: "stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 μs, query 0 μs, wait 0 μs"
+      Tasks: 2 (limit: 2311)
+     Memory: 1.2M
+     CGroup: /system.slice/pgbouncer.service
+             └─2175 /usr/sbin/pgbouncer /etc/pgbouncer/pgbouncer.ini
+
+May 26 21:03:13 postgres pgbouncer[2175]: stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 us, query 0 us, wait 0 us
+May 26 21:04:13 postgres pgbouncer[2175]: stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 us, query 0 us, wait 0 us
+May 26 21:05:13 postgres pgbouncer[2175]: stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 us, query 0 us, wait 0 us
+May 26 21:06:13 postgres pgbouncer[2175]: stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 us, query 0 us, wait 0 us
+May 26 21:07:13 postgres pgbouncer[2175]: stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 us, query 0 us, wait 0 us
+May 26 21:08:13 postgres pgbouncer[2175]: stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 us, query 0 us, wait 0 us
+May 26 21:09:13 postgres pgbouncer[2175]: stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 us, query 0 us, wait 0 us
+May 26 21:10:13 postgres pgbouncer[2175]: stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 us, query 0 us, wait 0 us
+May 26 21:11:13 postgres pgbouncer[2175]: stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 us, query 0 us, wait 0 us
+May 26 21:12:13 postgres pgbouncer[2175]: stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 us, query 0 us, wait 0 us
+
+
+#рестартанул на 3 ноды
+house@postgres:~$ sudo systemctl restart pgbouncer
+
+#pgbouncer проверил на 3 ноды
+house@postgres:~$ sudo systemctl status pgbouncer
+● pgbouncer.service - pgbouncer PostgreSQL connection pooler
+     Loaded: loaded (/lib/systemd/system/pgbouncer.service; enabled; vendor preset: enabled)
+     Active: active (running) since Thu 2022-05-26 21:13:48 UTC; 3min 59s ago
+   Main PID: 2510 (pgbouncer)
+     Status: "stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 μs, query 0 μs, wait 0 μs"
+      Tasks: 2 (limit: 2311)
+     Memory: 1.1M
+     CGroup: /system.slice/pgbouncer.service
+             └─2510 /usr/sbin/pgbouncer /etc/pgbouncer/pgbouncer.ini
+
+May 26 21:13:48 postgres systemd[1]: Starting pgbouncer PostgreSQL connection pooler...
+May 26 21:13:48 postgres pgbouncer[2510]: kernel file descriptor limit: 1024 (hard: 524288); max_client_conn: 100, max expected fd use>
+May 26 21:13:48 postgres pgbouncer[2510]: listening on 0.0.0.0:6432
+May 26 21:13:48 postgres pgbouncer[2510]: listening on [::]:6432
+May 26 21:13:48 postgres pgbouncer[2510]: listening on unix:/tmp/.s.PGSQL.6432
+May 26 21:13:48 postgres pgbouncer[2510]: process up: PgBouncer 1.17.0, libevent 2.1.11-stable (epoll), adns: c-ares 1.15.0, tls: Open>
+May 26 21:13:48 postgres systemd[1]: Started pgbouncer PostgreSQL connection pooler.
+May 26 21:14:48 postgres pgbouncer[2510]: stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 us, query 0 us, wait 0 us
+May 26 21:15:48 postgres pgbouncer[2510]: stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 us, query 0 us, wait 0 us
+May 26 21:16:48 postgres pgbouncer[2510]: stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 us, query 0 us, wait 0 us
+
+49 мин
