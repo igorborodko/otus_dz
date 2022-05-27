@@ -6,6 +6,10 @@
 10.129.0.18 etcd2
 10.129.0.3  etcd3
 
+10.129.0.26 postgres1
+10.129.0.10 postgres2
+10.129.0.35 postgres3
+
 
 #на трех машинах установил
 sudo apt update && sudo apt upgrade -y && sudo apt install -y etcd
@@ -748,4 +752,167 @@ May 26 21:14:48 postgres pgbouncer[2510]: stats: 0 xacts/s, 0 queries/s, in 0 B/
 May 26 21:15:48 postgres pgbouncer[2510]: stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 us, query 0 us, wait 0 us
 May 26 21:16:48 postgres pgbouncer[2510]: stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 us, query 0 us, wait 0 us
 
-49 мин
+#
+#
+#
+#
+#
+#
+#
+
+house@postgres:~$ sudo patronictl -c /etc/patroni.yml list
++-----------+-------------+---------+---------+----+-----------+
+| Member    | Host        | Role    | State   | TL | Lag in MB |
++ Cluster: patroni (7101768530942875526) -----+----+-----------+
+| pgsql1    | 10.129.0.26 | Leader  | running |  6 |           |
+| postgres2 | 10.129.0.10 | Replica | running |  6 |         0 |
+| postgres3 | 10.129.0.35 | Replica | running |  6 |         0 |
++-----------+-------------+---------+---------+----+-----------+
+
+
+-- in psql
+select usename,passwd from pg_shadow;
+
+
+house@postgres:~$ sudo -u postgres  psql -h localhost
+
+create user admindb with password 'root123';
+
+
+
+#--настроил на на 3 ноды userlist (можно было в начале вставить)
+house@postgres:~$sudo nano /etc/pgbouncer/userlist.txt
+"postgres"  "SCRAM-SHA-256$4096:5QzE5QKo/Y0sUSKxIIhmBA==$mViw6DFyxLkcRRDyft3UOoJ/JGw5zRyvpOJnkt+EtmI=:8gi9vxsVajxpmcVZb3gqjnecPeXoel/eBqk3pEbbX7k="
+
+
+house@postgres:~$ sudo nano /etc/pgbouncer/pgbouncer.ini
+admin_users = postgres
+
+
+house@postgres:~$ sudo systemctl restart pgbouncer
+house@postgres:~$ sudo systemctl status pgbouncer
+● pgbouncer.service - pgbouncer PostgreSQL connection pooler
+     Loaded: loaded (/lib/systemd/system/pgbouncer.service; enabled; vendor preset: enabled)
+     Active: active (running) since Fri 2022-05-27 19:17:32 UTC; 8s ago
+   Main PID: 1061 (pgbouncer)
+      Tasks: 2 (limit: 2311)
+     Memory: 1.0M
+     CGroup: /system.slice/pgbouncer.service
+             └─1061 /usr/sbin/pgbouncer /etc/pgbouncer/pgbouncer.ini
+
+May 27 19:17:32 postgres systemd[1]: Starting pgbouncer PostgreSQL connection pooler...
+May 27 19:17:32 postgres pgbouncer[1061]: kernel file descriptor limit: 1024 (hard: 524288); max_client_conn: 100, max expected fd use>
+May 27 19:17:32 postgres pgbouncer[1061]: listening on 0.0.0.0:6432
+May 27 19:17:32 postgres pgbouncer[1061]: listening on [::]:6432
+May 27 19:17:32 postgres pgbouncer[1061]: listening on unix:/tmp/.s.PGSQL.6432
+May 27 19:17:32 postgres pgbouncer[1061]: process up: PgBouncer 1.17.0, libevent 2.1.11-stable (epoll), adns: c-ares 1.15.0, tls: Open>
+May 27 19:17:32 postgres systemd[1]: Started pgbouncer PostgreSQL connection pooler.
+
+house@postgres:~$ sudo -u postgres psql -p 6432 -h 127.0.0.1 otus	
+Password for user postgres: zalando_321
+psql (14.3 (Ubuntu 14.3-1.pgdg20.04+1))
+Type "help" for help.
+
+otus=#
+
+
+house@postgres:~$ sudo -u postgres psql -p 6432 pgbouncer -h localhost
+#zalando_321
+
+pgbouncer=# show clients;
+
+ type |   user   | database  | state  |   addr    | port  | local_addr | local_port |      connect_time       |      request_time       | wait | wait_us | close_needed |      ptr       | link | remote_pid | tls
+------+----------+-----------+--------+-----------+-------+------------+------------+-------------------------+-------------------------+------+---------+--------------+----------------+------+------------+-----
+ C    | postgres | otus      | active | 127.0.0.1 | 46528 | 127.0.0.1  |       6432 | 2022-05-27 19:18:08 UTC | 2022-05-27 19:18:08 UTC |    0 |       0 |            0 | 0x561f2a418350 |      |          0 |
+ C    | postgres | pgbouncer | active | ::1       | 32822 | ::1        |       6432 | 2022-05-27 19:40:07 UTC | 2022-05-27 19:40:15 UTC |    0 |       0 |            0 | 0x561f2a418580 |      |          0 |
+(2 rows)
+
+pgbouncer=# show database;
+
+   name    |   host    | port | database  | force_user | pool_size | min_pool_size | reserve_pool | pool_mode | max_connections | current_connections | paused | disabled
+-----------+-----------+------+-----------+------------+-----------+---------------+--------------+-----------+-----------------+---------------------+--------+----------
+ otus      | 127.0.0.1 | 5432 | otus      |            |        20 |             0 |            0 |           |               0 |                   0 |      0 |        0
+ pgbouncer |           | 6432 | pgbouncer | pgbouncer  |         2 |             0 |            0 | statement |               0 |                   0 |      0 |        0
+(2 rows)
+
+
+#-- нагрузим pgbench с другого хоста 10.129.0.35 postgres3
+house@postgres3:~$ sudo -u postgres pgbench -p 6432 -c 20 -C -T 60 -P 1 -d otus -h 10.129.0.26
+Password:
+pgbench (14.3 (Ubuntu 14.3-1.pgdg20.04+1))
+pgbench: pghost: 10.129.0.26 pgport: 6432 nclients: 20 duration: 60 dbName: otus
+starting vacuum...end.
+pgbench: client 0 executing script "<builtin: TPC-B (sort of)>"
+pgbench: client 0 executing \set aid
+pgbench: client 0 executing \set bid
+pgbench: client 0 executing \set tid
+pgbench: client 0 executing \set delta
+pgbench: client 0 sending BEGIN;
+pgbench: client 0 receiving
+pgbench: client 1 executing script "<builtin: TPC-B (sort of)>"
+pgbench: client 1 executing \set aid
+pgbench: client 1 executing \set bid
+pgbench: client 1 executing \set tid
+pgbench: client 1 executing \set delta
+pgbench: client 1 sending BEGIN;
+pgbench: client 1 receiving
+pgbench: client 2 executing script "<builtin: TPC-B (sort of)>"
+pgbench: client 2 executing \set aid
+pgbench: client 2 executing \set bid
+pgbench: client 2 executing \set tid
+pgbench: client 2 executing \set delta
+pgbench: client 2 sending BEGIN;
+pgbench: client 2 receiving
+pgbench: client 3 executing script "<builtin: TPC-B (sort of)>"
+pgbench: client 3 executing \set aid
+pgbench: client 3 executing \set bid
+pgbench: client 3 executing \set tid
+pgbench: client 3 executing \set delta
+pgbench: client 3 sending BEGIN;
+pgbench: client 3 receiving
+
+#проверил 1ую ноду 10.129.0.26 postgres1____ pooler error: SASL authentication failed, tls=no
+house@postgres:~$ sudo systemctl status pgbouncer
+● pgbouncer.service - pgbouncer PostgreSQL connection pooler
+     Loaded: loaded (/lib/systemd/system/pgbouncer.service; enabled; vendor preset: enabled)
+     Active: active (running) since Fri 2022-05-27 19:17:32 UTC; 1h 49min ago
+   Main PID: 1061 (pgbouncer)
+     Status: "stats: 0 xacts/s, 0 queries/s, in 26512 B/s, out 11 B/s, xact 76999 μs, query 37017 μs, wait 33 μs"
+      Tasks: 2 (limit: 2311)
+     Memory: 2.3M
+     CGroup: /system.slice/pgbouncer.service
+             └─1061 /usr/sbin/pgbouncer /etc/pgbouncer/pgbouncer.ini
+
+May 27 21:05:33 postgres pgbouncer[1061]: C-0x561f2a4189e0: otus/postgres@10.129.0.35:45052 closing because: SASL authentication faile>
+May 27 21:05:33 postgres pgbouncer[1061]: C-0x561f2a4189e0: otus/postgres@10.129.0.35:45052 pooler error: SASL authentication failed
+May 27 21:05:48 postgres pgbouncer[1061]: C-0x561f2a4189e0: otus/postgres@10.129.0.35:45054 login attempt: db=otus user=postgres tls=no
+May 27 21:05:49 postgres pgbouncer[1061]: C-0x561f2a4189e0: otus/postgres@10.129.0.35:45056 login attempt: db=otus user=postgres tls=no
+May 27 21:05:49 postgres pgbouncer[1061]: S-0x561f2a41f5c0: otus/postgres@127.0.0.1:5432 new connection to server (from 127.0.0.1:3326>
+May 27 21:05:50 postgres pgbouncer[1061]: C-0x561f2a4189e0: otus/postgres@10.129.0.35:45056 closing because: client close request (age>
+May 27 21:06:32 postgres pgbouncer[1061]: stats: 0 xacts/s, 0 queries/s, in 26512 B/s, out 11 B/s, xact 76999 us, query 37017 us, wait>
+May 27 21:07:10 postgres pgbouncer[1061]: C-0x561f2a4189e0: otus/postgres@10.129.0.10:54860 login attempt: db=otus user=postgres tls=no
+May 27 21:07:12 postgres pgbouncer[1061]: C-0x561f2a4189e0: otus/postgres@10.129.0.10:54862 login attempt: db=otus user=postgres tls=no
+May 27 21:07:14 postgres pgbouncer[1061]: C-0x561f2a4189e0: otus/postgres@10.129.0.10:54862 closing because: client close 
+
+
+
+
+#Проверяю  - клиентов нет
+house@postgres:~$ sudo -u postgres psql -p 6432 pgbouncer -h localhost
+Password for user postgres:
+psql (14.3 (Ubuntu 14.3-1.pgdg20.04+1), server 1.17.0/bouncer)
+Type "help" for help.
+
+pgbouncer=# show clients;
+ type |   user   | database  | state  |   addr    | port  | local_addr | local_port |      connect_time       |      request_time       | wait | wait_us | close_needed |      ptr       | link | remote_pid | tls
+------+----------+-----------+--------+-----------+-------+------------+------------+-------------------------+-------------------------+------+---------+--------------+----------------+------+------------+-----
+ C    | postgres | otus      | active | 127.0.0.1 | 46528 | 127.0.0.1  |       6432 | 2022-05-27 19:18:08 UTC | 2022-05-27 19:18:08 UTC |    0 |       0 |            0 | 0x561f2a418350 |      |          0 |
+ C    | postgres | pgbouncer | active | ::1       | 32974 | ::1        |       6432 | 2022-05-27 20:31:17 UTC | 2022-05-27 20:32:14 UTC |   55 |  374372 |            0 | 0x561f2a418c10 |      |          0 |
+(2 rows)
+
+pgbouncer=# SHOW STATS_TOTALS;
+ database  | xact_count | query_count | bytes_received | bytes_sent | xact_time | query_time | wait_time
+-----------+------------+-------------+----------------+------------+-----------+------------+-----------
+ otus      |       2518 |       17400 |        2640662 |     689180 | 266311592 |  249262467 |    125411
+ pgbouncer |          5 |           5 |              0 |          0 |         0 |          0 |         0
+
