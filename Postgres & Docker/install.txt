@@ -1,0 +1,334 @@
+root@superserver:~# history
+  231  cd ..
+  232  cd /var/lib/postgres
+  233  ls
+  234  cd /home/docker-comp/
+  235  ls
+  236  echo docker-compose up -d
+  237  docker ps
+  238  docker stop amazing_mclaren psql-container
+  239  docker ps
+  240  echo docker-compose.yml up -d
+  241  cd
+  242  cd /home/docker-comp/
+  243  nano docker-compose.yml
+  244  echo docker-compose.yml up -d
+  245  ./docker-compose.yml up -d
+  246  sudo ./docker-compose.yml up -d
+  247  docker-compose up -d
+  248  cd
+  249  sudo rm /usr/local/lib/docker/cli-plugins/docker-compose
+  250  sudo apt -y install curl
+  251  sudo curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+  252  sudo chmod +x /usr/local/bin/docker-compose
+  253  docker-compose
+  254  cd /home/docker-comp/
+  255  ls
+  256  echo docker-compose up -d
+  257  docker-compose up -d
+  258  nano docker-compose.yml
+  259  cd
+  260  nano /home/docker-comp/docker-compose.yml
+  261  cd /home/docker-comp/
+  262  mw docker-compose.yml docker-compose.yaml
+  263  mv docker-compose.yml docker-compose.yaml
+  264  ls
+  265  docker-compose up -d
+  266  docker-compose.yaml up -d
+  267  nano docker-compose.yaml
+  268  rm docker-compose.yaml
+  269  ls
+  270  nano docker-compose.yaml
+  271  docker-compose up -d
+  272  nano docker-compose.yaml
+  273  docker-compose up -d
+  274  nano docker-compose.yaml
+  275  docker-compose up -d
+  276  nano docker-compose.yaml
+  277  docker-compose config
+  278  nano docker-compose.yaml
+  279  docker-compose config
+  280  nano docker-compose.yaml
+  281  docker-compose config
+  282  nano docker-compose.yaml
+  283  docker-compose config
+  284  nano docker-compose.yaml
+  285  docker-compose config
+  286  nano docker-compose.yaml
+  287  docker ps
+  288  cd /home/docker-comp/
+  289  ls
+  290  nano docker-compose.yaml
+  291  rm docker-compose.yaml
+  292  nano docker-compose.yaml
+  293  cd /home/docker-comp/
+  294  ls
+  295  ls -a
+  296  nano .docker-compose.yaml.swp
+  297  rm .docker-compose.yaml.swp
+  298  nano docker-compose.yaml
+  299  docker-compose config
+  300  docker-compose up -d
+  301  docker ps
+  302  docker ps -a
+  303  nano docker-compose.yaml
+  304  docker-compose up -d
+  305  docker ps -a
+  306  docker ps
+  307  docker stop docker-comp_postgres_1
+  308  docker ps
+  309  docker ps -a
+  310  nano docker-compose.yaml
+  311  docker-compose up -d
+  312  docker ps
+  313  docker exec -it 99253f906937 bash
+  314  docker run --rm -d -p 5050:5050 thajeztah/pgadmin4
+  315  docker ps
+  316  docker exec -it 99253f906937 bash
+  317  nano docker-compose.yaml
+  318  docker exec -it 99253f906937 bash
+  319  docker ps
+  320  docker stop 99253f906937
+  321  docker ps
+  322  docker rm 99253f906937
+  323  docker ps -a
+  324  docker rm 4374f5ff60fa
+  325  docker ps -a
+  326  docker rm a39392024a77
+  327  docker ps -a
+  328  nano docker-compose.yaml
+  329  docker-compose up -d
+  330  docker ps
+  331  docker exec -it 3a71982823f2 bash
+  332  docker ps
+  333  docker rm 3a71982823f2
+  334  docker stop  3a71982823f2
+  335  docker rm 3a71982823f2
+  336  docker-compose up -d
+  337  docker ps
+  338  docker exec -it 73c83f3324e8 bash
+  339  nano docker-compose.yaml
+  340  docker-compose up -d
+  341  docker-compose config
+  342  cd /var/lib/postgres
+  343  ls
+  344  cd..
+  345  cd ..
+  346  ls
+  347  cd ./postgresql/
+  348  ls
+  349  cd ./14/
+  350  ls
+  351  cd ./main/
+  352  ls
+  353  cd ..
+  354  cd
+  355  cd /var/lib/postgres/
+  356  ls
+  357  mkdir data
+  358  ls
+  359  cd /home/docker-comp/
+  360  ls
+  361  nano docker-compose.yaml
+  362  docker-compose config
+  363  mv docker-compose.yaml docker-compose.yml
+  364  docker-compose config
+  365  mv docker-compose.yml docker-compose.yaml
+  366  ls
+  367  nano docker-compose.yaml
+  368  rm docker-compose.yaml
+  369  nano docker-compose.yaml
+  370  docker-compose up -d
+  371  docker ps
+  372  cd /var/lib/postgres/data/
+  373  ls
+  374  cd ..
+  375  ls
+  376  docker exec -it 73c83f3324e8 bash
+  377  nano /home/docker-comp/docker-compose.yaml
+  378  docker exec -it 73c83f3324e8 bash
+  379  ls
+  380  cd ./data/
+  381  ls
+  382  ls -a
+  383  cd ..
+  384  ls -a
+  385  docker ps
+  386  docker stop 73c83f3324e8
+  387  docker start 73c83f3324e8
+  388  docker rm 73c83f3324e8
+  389  docker stop 73c83f3324e8
+  390  docker rm 73c83f3324e8
+  391  docker-compose up -d
+  392  cd /home/docker-comp/
+  393  docker-compose up -d
+  394  docker ps
+  395  docker stop docker-comp_pg_db_1
+  396  docker rm docker-comp_pg_db_1
+  397  docker ps -a
+  398  rm docker-compose.yaml
+  399  nano docker-compose.yaml
+  400  docker-compose config
+  401  nano docker-compose.yaml
+  402  docker-compose config
+  403  nano docker-compose.yaml
+  404  docker-compose config
+  405  nano docker-compose.yaml
+  406  docker-compose config
+  407  nano docker-compose.yaml
+  408  docker-compose config
+  409  nano docker-compose.yaml
+  410  docker-compose config
+  411  docker ps
+  412  docker stop 60fbeb60ccba
+  413  docker ps
+  414  docker ps -a
+  415  cd /home/docker-comp/
+  416  ls
+  417  nano docker-compose.yaml
+  418  docker-compose up -d
+  419  docker ps
+  420  docker exec -it 1ddf3ea79339 bash
+  421  nano docker-compose.yaml
+  422  docker ps
+  423  docker-compose stop
+  424  docker ps
+  425  docker ps -a
+  426  docker rm 1ddf3ea79339
+  427  nano docker-compose.yaml
+  428  docker-compose up -d
+  429  docker ps
+  430  docker exec -it 62b38e74cab0 bash
+  431  docker ps -a
+  432  docker image
+  433  docker images
+  434  $ docker run --rm -p 5050:5050 thajeztah/pgadmin4
+  435  docker run --rm -p 5050:5050 thajeztah/pgadmin4
+  436  docker ps
+  437  docker run --rm -p -d 5050:5050 thajeztah/pgadmin4
+  438  docker run --rm -p 5050:5050 thajeztah/pgadmin4 -d
+  439  docker run --rm -d -p 5050:5050 thajeztah/pgadmin4
+  440  docker ps
+  441  docker exec -it 62b38e74cab0 bash
+  442  docker ps
+  443  docker stop sad_albattani
+  444  docker run -d -p 5050:5050 --name pgadmin --network=pg thajeztah/pgadmin4
+  445  docker run -d -p 5050:5050 --name pgadmin thajeztah/pgadmin4
+  446  docker run -d -p 5050:5050 --name pgadmin  thajeztah/pgadmin4
+  447  docker run -d -p 5050:5050 --name pgadmin thajeztah/pgadmin4
+  448  docker ps
+  449  docker exec -it 62b38e74cab0 bash
+  450  docker-compose stop
+  451  docker ps
+  452  docker ps -a
+  453  docker-compose up -d
+  454  docker ps
+  455  docker exec -it docker-comp_pg_db_1
+  456  docker exec -it docker-comp_pg_db_1 bash
+  457  docker ps
+  458  cd /var/lib/
+  459  ls
+  460  cd ./postgres
+  461  ls
+  462  cd ./data/
+  463  ls
+  464  ls .
+  465  ls -a
+  466  cd ..
+  467  cd
+  468  docker ps
+  469  docker stop docker-comp_pg_db_1
+  470  docker rm docker-comp_pg_db_1
+  471  docker ps
+  472  docker images
+  473  sudo apt-cache search postgresql | grep postgresql
+  474  sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+  475  wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add
+  476  sudo apt -y update
+  477  sudo apt-cache search postgresql | grep postgresql
+  478  sudo apt -y install postgresql-14
+  479  sudo yum -y install https://download.postgresql.org/pub/repos/yum/reporpms/EL-7-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+  480  sudo yum install
+  481  sudo apt update
+  482  sudo apt install yum
+  483  sudo yum -y install https://download.postgresql.org/pub/repos/yum/reporpms/EL-7-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+  484  sudo apt-get -y install https://download.postgresql.org/pub/repos/yum/reporpms/EL-7-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+  485  sudo apt-get -y update
+  486  apt-get install -y postgresql14-server postgresql14
+  487  sudo /usr/pgsql-14/bin/postgresql-14-setup initdb
+  488  cd /usr/
+  489  ls
+  490  show c o n f i g _ f i l e
+  491  show config_file
+  492  apt instal show
+  493  apt install show
+  494  show config_file
+  495  apt update
+  496  show config_file
+  497  sudo show config_file
+  498  sudo /usr/pgsql-14/bin/postgresql-14-setup initdb
+  499  ystemctl status postgresql-14
+  500  systemctl status postgresql-14
+  501  history
+  502  cd
+  503  sudo apt update
+  504  sudo apt -y install postgresql
+  505  sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+  506  wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+  507  sudo apt update
+  508  sudo apt -y install postgresql
+  509  systemctl status postgresql-14
+  510  pg_lsclusters
+  511  sudo -u postgres psql
+  512  sudo -u postgres pg_ctlcluster 14 main stop
+  513  pg_lsclusters
+  514  du -h
+  515  df -h
+  516  ва -р
+  517  df -h
+  518  exit
+  519  df -hT
+  520  lsblk
+  521  exit
+  522  lsblk
+  523  sudo apt-get update
+  524  sudo apt-get install parted
+  525  sudo parted -l | grep Error
+  526  lsblk
+  527  sudo parted /dev/sdb mklabel gpt
+  528  sudo parted -a opt /dev/sdb mkpart primary ext4 0% 100%
+  529  lsblk
+  530  sudo mkfs.ext4 -L datapartition /dev/sdb1
+  531  sudo lsblk --fs
+  532  sudo lsblk -o NAME,FSTYPE,LABEL,UUID,MOUNTPOINT
+  533  history
+  534  sudo mkdir -p /mnt/data
+  535  df -h -x tmpfs -x devtmpfs
+  536  df -h
+  537  lsblk
+  538  df -h
+  539  /mnt/data - chown -R postgres:postgres /mnt/data/
+  540  cd /var/lib/postgres/14
+  541  cd /var/lib/postgres/
+  542  ls
+  543  cd ..
+  544  ls
+  545  cd ./postgresql/
+  546  ls
+  547  cd ./14/
+  548  ls
+  549  cd
+  550  cd /mnt/data/
+  551  ls
+  552  cd /var/lib/postgresql/14
+  553  ls
+  554  cd ./main/
+  555  ls
+  556  nano postgresql.auto.conf
+  557  cd
+  558  mv /var/lib/postgresql/14 /mnt/data
+  559  cd /mnt/data/
+  560  ls
+  561  sudo -u postgres pg_ctlcluster 14 main start
+  562  nano postgresql.auto.conf
+  563  ls
