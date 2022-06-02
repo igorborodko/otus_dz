@@ -1,0 +1,62 @@
+На домашней машине windows
+Установил докер, клиента Lens для миникуба
+
+Проверил что контейнеры не запущены
+PS C:\Users\house> docker ps
+CONTAINER ID   IMAGE     COMMAND   CREATED   STATUS    PORTS     NAMES
+
+#Запустил миникуб
+PS C:\Users\house> minikube start
+
+#Выполнил
+PS C:\Users\house> minikube docker-env
+$Env:DOCKER_TLS_VERIFY = "1"
+$Env:DOCKER_HOST = "tcp://127.0.0.1:60481"
+$Env:DOCKER_CERT_PATH = "C:\Users\house\.minikube\certs"
+$Env:MINIKUBE_ACTIVE_DOCKERD = "minikube"
+# To point your shell to minikube's docker-daemon, run:
+# & minikube -p minikube docker-env --shell powershell | Invoke-Expression
+
+
+В другом окне выполнил
+PS C:\Users\house> cd .\kub2\postgres\
+PS C:\Users\house\kub2\postgres> $Env:DOCKER_TLS_VERIFY = "1"
+PS C:\Users\house\kub2\postgres> $Env:DOCKER_HOST = "tcp://127.0.0.1:60481"
+PS C:\Users\house\kub2\postgres> $Env:DOCKER_CERT_PATH = "C:\Users\house\.minikube\certs"
+PS C:\Users\house\kub2\postgres> $Env:MINIKUBE_ACTIVE_DOCKERD = "minikube"
+PS C:\Users\house\kub2\postgres> docker ps
+CONTAINER ID   IMAGE                  COMMAND                  CREATED              STATUS              PORTS     NAMES
+f094346dce29   6e38f40d628d           "/storage-provisioner"   About a minute ago   Up About a minute             k8s_storage-provisioner_storage-provisioner_kube-system_b799f4ac-203c-4b14-8e02-8d0ecf349f1d_1
+5d33c8e8ba5f   a4ca41631cc7           "/coredns -conf /etc…"   About a minute ago   Up About a minute             k8s_coredns_coredns-64897985d-2pkpt_kube-system_a2a4a548-f342-40f2-98bf-0e62fa40e831_0
+8978b03eba13   9b7cc9982109           "/usr/local/bin/kube…"   About a minute ago   Up About a minute             k8s_kube-proxy_kube-proxy-r6pwh_kube-system_e47bd81b-313b-4e87-9bc7-49675b3b518a_0
+7ef16e8496ee   k8s.gcr.io/pause:3.6   "/pause"                 About a minute ago   Up About a minute             k8s_POD_kube-proxy-r6pwh_kube-system_e47bd81b-313b-4e87-9bc7-49675b3b518a_0
+c40ea2819c27   k8s.gcr.io/pause:3.6   "/pause"                 About a minute ago   Up About a minute             k8s_POD_coredns-64897985d-2pkpt_kube-system_a2a4a548-f342-40f2-98bf-0e62fa40e831_0
+a7674f1e61a6   k8s.gcr.io/pause:3.6   "/pause"                 About a minute ago   Up About a minute             k8s_POD_storage-provisioner_kube-system_b799f4ac-203c-4b14-8e02-8d0ecf349f1d_0
+
+
+#Создал под
+PS C:\Users\house\kub2\postgres> kubectl apply -f postgres.yaml
+service/postgres created
+
+#Пробросил порт
+PS C:\Users\house\kub2\postgres> kubectl port-forward postgres-statefulset-0 5432:5432
+Unable to listen on port 5432: Listeners failed to create with the following errors: [unable to create listener: Error listen tcp4 127.0.0.1:5432: bind: Only one usage of each socket address (protocol/network address/port) is normally permitted. unable to create listener: Error listen tcp6 [::1]:5432: bind: Only one usage of each socket address (protocol/network address/port) is normally permitted.]
+error: unable to listen on any of the requested ports: [{5432 5432}]
+
+
+#проверил подключение в DBeaver - ОК
+Адрес	localhost:5432
+База Данных	myapp
+Пользователь myuser
+Пароль passwd
+URL	jdbc:postgresql://localhost:5432/myapp
+
+#С ошибкой не разобрался...
+postgres\app>docker build -t pg_kub2_postgres:v1 .
+
+kubectl apply -f secrets.yaml -f app-config.yaml -f deployment.yaml -f service.yaml
+
+minikube service pg-service --url -n pg-kub2
+
+http://127.0.0.1:59529/db
+Почему ошибка?
