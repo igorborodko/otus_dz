@@ -1,9 +1,9 @@
-#-- установка постгрес на ВМ yandex cloud
+#-- установка постгрес на ВМ
 sudo apt update && sudo apt upgrade -y -q && echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee -a /etc/apt/sources.list.d/pgdg.list && wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add - && sudo apt-get update && sudo apt -y install postgresql-14
 
 
 
-#--Установил gsutil (думал смогу скачать DB , но в итоге ошибка авторизации)
+#--Установил gsutil (думал смогу скачать одну ДБ , но в итоге ошибка авторизации)
 sudo apt-get install apt-transport-https ca-certificates gnupg
 
 echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
@@ -40,5 +40,109 @@ Missing required parameter: redirect_uri
 
 
 #Экспортировать так же не могу из за того что не активирован гугл клауд.
+#
+#
+#
+#
+#
+#
+#
+#
+-----------------------------------------------------------------------
 
 
+house@posgres-bq:~$ export GCSFUSE_REPO=gcsfuse-`lsb_release -c -s` && echo "deb http://packages.cloud.google.com/apt $GCSFUSE_REPO main" | sudo tee /etc/apt/sources.list.d/gcsfuse.list && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+deb http://packages.cloud.google.com/apt gcsfuse-focal main
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100  2537  100  2537    0     0  26154      0 --:--:-- --:--:-- --:--:-- 26154
+OK
+house@posgres-bq:~$ sudo apt update && sudo DEBIAN_FRONTEND=noninteractive apt -y install gcsfuse
+Hit:1 http://mirror.yandex.ru/ubuntu focal InRelease
+Get:2 http://mirror.yandex.ru/ubuntu focal-updates InRelease [114 kB]
+Get:3 http://mirror.yandex.ru/ubuntu focal-backports InRelease [108 kB]
+Hit:4 http://apt.postgresql.org/pub/repos/apt focal-pgdg InRelease
+Get:5 http://security.ubuntu.com/ubuntu focal-security InRelease [114 kB]
+Hit:6 https://packages.cloud.google.com/apt cloud-sdk InRelease
+Get:7 http://packages.cloud.google.com/apt gcsfuse-focal InRelease [5,389 B]
+Get:8 http://packages.cloud.google.com/apt gcsfuse-focal/main amd64 Packages [1,154 B]
+Fetched 343 kB in 1s (331 kB/s)
+Reading package lists... Done
+Building dependency tree
+Reading state information... Done
+All packages are up to date.
+N: Skipping acquire of configured file 'main/binary-i386/Packages' as repository 'http://apt.postgresql.org/pub/repos/apt focal-pgdg InRelease' doesn't support architecture 'i386'
+Reading package lists... Done
+Building dependency tree
+Reading state information... Done
+The following NEW packages will be installed:
+  gcsfuse
+0 upgraded, 1 newly installed, 0 to remove and 0 not upgraded.
+Need to get 11.6 MB of archives.
+After this operation, 27.4 MB of additional disk space will be used.
+Get:1 http://packages.cloud.google.com/apt gcsfuse-focal/main amd64 gcsfuse amd64 0.41.2 [11.6 MB]
+Fetched 11.6 MB in 1s (17.4 MB/s)
+Selecting previously unselected package gcsfuse.
+(Reading database ... 142327 files and directories currently installed.)
+Preparing to unpack .../gcsfuse_0.41.2_amd64.deb ...
+Unpacking gcsfuse (0.41.2) ...
+Setting up gcsfuse (0.41.2) ...
+
+
+#Скопировал бакеты
+house@posgres-bq:/tmp$ gsutil -m cp -R gs://chicago10/taxi.csv.0000000000[0-3]* .
+Copying gs://chicago10/taxi.csv.000000000000...
+Copying gs://chicago10/taxi.csv.000000000002...
+Copying gs://chicago10/taxi.csv.000000000001...
+Copying gs://chicago10/taxi.csv.000000000003...
+Copying gs://chicago10/taxi.csv.000000000006...
+Copying gs://chicago10/taxi.csv.000000000005...
+Copying gs://chicago10/taxi.csv.000000000008...
+Copying gs://chicago10/taxi.csv.000000000004...
+Copying gs://chicago10/taxi.csv.000000000007...
+Copying gs://chicago10/taxi.csv.000000000009...
+^CException in UIThread:  10.0 GiB]   0% Done
+
+#Загрузка не начиналась (Exception in UIThread:  10.0 GiB]   0% Done) зависло в данном состоянии ждал минут 5. Недождался - прервал, прогреса небыло.
+#Вроде скопировалось, но gstmp формат временных файлов или загрузка не завершена.
+#Или это примонтированные файлы из предыдущей команды?
+
+house@posgres-bq:/tmp$ ls
+mc-house                                                                           taxi.csv.000000000003_.gstmp
+systemd-private-5307c6e79d7e44d59bf360e73db41158-systemd-logind.service-lkNlei     taxi.csv.000000000004_.gstmp
+systemd-private-5307c6e79d7e44d59bf360e73db41158-systemd-resolved.service-eD0S5g   taxi.csv.000000000005_.gstmp
+systemd-private-5307c6e79d7e44d59bf360e73db41158-systemd-timesyncd.service-rhoKvi  taxi.csv.000000000006_.gstmp
+taxi.csv.000000000000_.gstmp                                                       taxi.csv.000000000007_.gstmp
+taxi.csv.000000000001_.gstmp                                                       taxi.csv.000000000008_.gstmp
+taxi.csv.000000000002_.gstmp                                                       taxi.csv.000000000009_.gstmp
+
+house@posgres-bq:/tmp$ ls -la
+total 44
+drwxrwxrwt 11 root  root       4096 Jun  5 15:51 .
+drwxr-xr-x 18 root  root       4096 Jun  5 14:57 ..
+drwxrwxrwt  2 root  root       4096 Jun  5 14:57 .font-unix
+drwxrwxrwt  2 root  root       4096 Jun  5 14:57 .ICE-unix
+drwx------  2 house house      4096 Jun  5 15:10 mc-house
+drwx------  3 root  root       4096 Jun  5 14:57 systemd-private-5307c6e79d7e44d59bf360e73db41158-systemd-logind.service-lkNlei
+drwx------  3 root  root       4096 Jun  5 14:57 systemd-private-5307c6e79d7e44d59bf360e73db41158-systemd-resolved.service-eD0S5g
+drwx------  3 root  root       4096 Jun  5 14:57 systemd-private-5307c6e79d7e44d59bf360e73db41158-systemd-timesyncd.service-rhoKvi
+-rw-rw-r--  1 house house 267363203 Jun  5 16:34 taxi.csv.000000000000_.gstmp
+-rw-rw-r--  1 house house 267344607 Jun  5 16:34 taxi.csv.000000000001_.gstmp
+-rw-rw-r--  1 house house 267390243 Jun  5 16:34 taxi.csv.000000000002_.gstmp
+-rw-rw-r--  1 house house 267417696 Jun  5 16:34 taxi.csv.000000000003_.gstmp
+-rw-rw-r--  1 house house 266371749 Jun  5 16:34 taxi.csv.000000000004_.gstmp
+-rw-rw-r--  1 house house 266233035 Jun  5 16:34 taxi.csv.000000000005_.gstmp
+-rw-rw-r--  1 house house 266219968 Jun  5 16:34 taxi.csv.000000000006_.gstmp
+-rw-rw-r--  1 house house 267380379 Jun  5 16:34 taxi.csv.000000000007_.gstmp
+-rw-rw-r--  1 house house 267367985 Jun  5 16:34 taxi.csv.000000000008_.gstmp
+-rw-rw-r--  1 house house 267278191 Jun  5 16:34 taxi.csv.000000000009_.gstmp
+drwxrwxrwt  2 root  root       4096 Jun  5 14:57 .Test-unix
+drwxrwxrwt  2 root  root       4096 Jun  5 14:57 .X11-unix
+drwxrwxrwt  2 root  root       4096 Jun  5 14:57 .XIM-unix
+
+
+
+Не понимаю как копировать их в постгрес.
+На уроке у преподавателя много чего уже было предустановлено.
+Инструкций (конспектов) он так же не приложил к уроку( запросил, пока не отвечает)
+Много непонятных моментов.
