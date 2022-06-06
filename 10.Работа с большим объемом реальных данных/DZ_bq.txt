@@ -1,0 +1,137 @@
+
+#Смонтировал chicago10
+
+house@posgres-bq:~$ pg_lsclusters
+Ver Cluster Port Status Owner    Data directory              Log file
+14  main    5432 online postgres /var/lib/postgresql/14/main /var/log/postgresql/postgresql-14-main.log
+house@posgres-bq:~$ df -h
+Filesystem      Size  Used Avail Use% Mounted on
+udev            963M     0  963M   0% /dev
+tmpfs           199M  808K  198M   1% /run
+/dev/vda2       148G  3.8G  138G   3% /
+tmpfs           992M   28K  992M   1% /dev/shm
+tmpfs           5.0M     0  5.0M   0% /run/lock
+tmpfs           992M     0  992M   0% /sys/fs/cgroup
+tmpfs           199M     0  199M   0% /run/user/1000
+house@posgres-bq:~$ cd /home/house/
+house@posgres-bq:~$ ls
+dcsfuse  gcsfuse
+house@posgres-bq:~$ cd ./gcsfuse/
+house@posgres-bq:~/gcsfuse$ ls
+house@posgres-bq:~/gcsfuse$ gcsfuse chicago10 .
+2022/06/06 19:25:41.228075 Start gcsfuse/0.41.2 (Go version go1.17.6) for app "" using mount point: /home/house/gcsfuse
+2022/06/06 19:25:41.245427 Opening GCS connection...
+2022/06/06 19:25:41.284913 Mounting file system "chicago10"...
+2022/06/06 19:25:41.293369 File system has been successfully mounted.
+house@posgres-bq:~/gcsfuse$ df -h
+Filesystem      Size  Used Avail Use% Mounted on
+udev            963M     0  963M   0% /dev
+tmpfs           199M  808K  198M   1% /run
+/dev/vda2       148G  3.8G  138G   3% /
+tmpfs           992M   28K  992M   1% /dev/shm
+tmpfs           5.0M     0  5.0M   0% /run/lock
+tmpfs           992M     0  992M   0% /sys/fs/cgroup
+tmpfs           199M     0  199M   0% /run/user/1000
+chicago10       1.0P     0  1.0P   0% /home/house/gcsfuse
+
+#Но в монтированую папку не пускает
+house@posgres-bq:~/gcsfuse$ ls
+ls: reading directory '.': Input/output error
+house@posgres-bq:~/gcsfuse$ sudo su postgres
+postgres@posgres-bq:/home/house/gcsfuse$ ls
+ls: cannot open directory '.': Permission denied
+
+#Попробовал gsutil
+# И опять провисел минут 15 - прогресса в процентах небыло [0/40 files][    0.0 B/ 10.0 GiB]   0% Done / по одному файлу аналогичная ситуация была.
+# У вас 2% за несколько сек прогрузилось
+
+house@posgres-bq:/tmp$ sudo su postgres
+postgres@posgres-bq:/tmp$ cd ~
+postgres@posgres-bq:~$ mkdir taxi
+postgres@posgres-bq:~$ cd taxi/
+postgres@posgres-bq:~/taxi$ ls
+postgres@posgres-bq:~/taxi$ gsutil -m cp -R gs://chicago10/taxi.csv.0000000000[0-3]* ~/taxi
+Copying gs://chicago10/taxi.csv.000000000000...
+Copying gs://chicago10/taxi.csv.000000000001...
+Copying gs://chicago10/taxi.csv.000000000002...
+Copying gs://chicago10/taxi.csv.000000000003...
+Copying gs://chicago10/taxi.csv.000000000004...
+Copying gs://chicago10/taxi.csv.000000000008...
+Copying gs://chicago10/taxi.csv.000000000007...
+Copying gs://chicago10/taxi.csv.000000000005...
+Copying gs://chicago10/taxi.csv.000000000009...
+Copying gs://chicago10/taxi.csv.000000000006...
+^C[0/40 files][    0.0 B/ 10.0 GiB]   0% Done
+postgres@posgres-bq:~/taxi$ ls
+taxi.csv.000000000000_.gstmp  taxi.csv.000000000003_.gstmp  taxi.csv.000000000006_.gstmp  taxi.csv.000000000009_.gstmp
+taxi.csv.000000000001_.gstmp  taxi.csv.000000000004_.gstmp  taxi.csv.000000000007_.gstmp
+taxi.csv.000000000002_.gstmp  taxi.csv.000000000005_.gstmp  taxi.csv.000000000008_.gstmp
+
+
+#---------------------------------------------------------
+#  Пересоздал виртуалку (Input/output error)
+установил постгрес, gcsfuse
+
+root@posgres-bq2:~# mkdir gcsfuse
+root@posgres-bq2:~# ls
+gcsfuse
+root@posgres-bq2:~# cd gcsfuse/
+root@posgres-bq2:~/gcsfuse# ls
+root@posgres-bq2:~/gcsfuse# gcsfuse chicago10 .
+2022/06/06 20:42:06.579900 Start gcsfuse/0.41.2 (Go version go1.17.6) for app "" using mount point: /root/gcsfuse
+2022/06/06 20:42:06.592927 Opening GCS connection...
+2022/06/06 20:42:06.633067 Mounting file system "chicago10"...
+2022/06/06 20:42:06.635681 File system has been successfully mounted.
+root@posgres-bq2:~/gcsfuse# df -h
+Filesystem      Size  Used Avail Use% Mounted on
+udev            963M     0  963M   0% /dev
+tmpfs           199M  808K  198M   1% /run
+/dev/vda2        50G  2.7G   45G   6% /
+tmpfs           992M   28K  992M   1% /dev/shm
+tmpfs           5.0M     0  5.0M   0% /run/lock
+tmpfs           992M     0  992M   0% /sys/fs/cgroup
+tmpfs           199M     0  199M   0% /run/user/1000
+chicago10       1.0P     0  1.0P   0% /root/gcsfuse
+root@posgres-bq2:~/gcsfuse# ls
+root@posgres-bq2:~/gcsfuse# cd ..
+root@posgres-bq2:~# cd gcsfuse/
+root@posgres-bq2:~/gcsfuse# ls
+ls: reading directory '.': Input/output error
+root@posgres-bq2:~/gcsfuse# ls -l
+ls: reading directory '.': Input/output error
+total 0
+
+#----install gsutil
+sudo apt update
+sudo apt install gsutil
+
+house@posgres-bq2:/tmp$ gsutil -m cp -R gs://chicago10/taxi.csv.0000000000[0-3]* .
+Can't locate LWP/UserAgent.pm in @INC (you may need to install the LWP::UserAgent module) (@INC contains: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.30.0 /usr/local/share/perl/5.30.0 /usr/lib/x86_64-linux-gnu/perl5/5.30 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl/5.30 /usr/share/perl/5.30 /usr/local/lib/site_perl /usr/lib/x86_64-linux-gnu/perl-base) at /usr/bin/gsutil line 26.
+BEGIN failed--compilation aborted at /usr/bin/gsutil line 26.
+
+#--нашел ошибку https://askubuntu.com/questions/619932/cant-locate-lwp
+
+#Ошибка ввода вывода (Input/output error)
+root@posgres-bq2:~/gcsfuse# wget http://www.cpan.org/modules/by-module/LWP/libwww-perl-6.06.tar.gz
+--2022-06-06 20:55:25--  http://www.cpan.org/modules/by-module/LWP/libwww-perl-6.06.tar.gz
+Resolving www.cpan.org (www.cpan.org)... 151.101.245.55, 2a04:4e42:3a::311
+Connecting to www.cpan.org (www.cpan.org)|151.101.245.55|:80... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 135556 (132K) [application/x-gzip]
+libwww-perl-6.06.tar.gz: Input/output error
+
+Cannot write to ‘libwww-perl-6.06.tar.gz’ (Input/output error).
+
+#установил - не помогло - только побился gsutil похоже
+apt-get install libwww-perl
+
+
+root@posgres-bq2:/tmp# gsutil -m cp -R gs://chicago10/taxi.csv.0000000000[0-3]* .
+Unknown option: m
+No command was given.
+
+Choose one of -b, -d, -e, or -r to do something.
+Try `/usr/bin/gsutil --help' for more information.
+
+
+
