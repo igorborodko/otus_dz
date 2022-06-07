@@ -1,1 +1,157 @@
 
+
+#СОздал кластер куба в вебинтрфейсе яндекс клауда
+
+#Выполнил инициализацию
+https://cloud.yandex.ru/docs/cli/quickstart#install
+
+
+#Список кластеров Kubernetes, доступных в папке. yc container cluster list
+
+PS C:\Users\house> yc container cluster list
++----------------------+------------+---------------------+---------+---------+-----------------------+---------------------+
+|          ID          |    NAME    |     CREATED AT      | HEALTH  | STATUS  |   EXTERNAL ENDPOINT   |  INTERNAL ENDPOINT  |
++----------------------+------------+---------------------+---------+---------+-----------------------+---------------------+
+| catnh4ppjut3hu3bofiv | postgresha | 2022-06-07 13:50:50 | HEALTHY | RUNNING | https://51.250.66.112 | https://10.128.0.12 |
++----------------------+------------+---------------------+---------+---------+-----------------------+---------------------+
+
+#Список node postgresha 
+PS C:\Users\house> yc container cluster list-node-groups catnh4ppjut3hu3bofiv
++----+------+-------------------+------------+--------+------+
+| ID | NAME | INSTANCE GROUP ID | CREATED AT | STATUS | SIZE |
++----+------+-------------------+------------+--------+------+
++----+------+-------------------+------------+--------+------+
+
+#С вашей командой не разобрался до конца, пробовал написать для ЯО разные варианты - ошибки.
+https://cloud.yandex.ru/docs/cli/cli-ref/managed-services/container/node-group/create
+
+#-----------------
+ yc container node-group create \
+  --cluster-name "postgresha" \
+  --cores "2" \
+  --core-fraction "2" \
+  --disk-size "30" \
+  --disk-type "network-ssd" \
+  --fixed-size "3" \
+  --location "ru-central1-a" \
+  --memory "2" \
+  --name "pod_psql" \
+  --network-acceleration-type "standard" \
+  --network-interface security-group-ids=["pod_network"],subnets=["10.96.0.0/16"],ipv4-address="nat" \
+  --platform-id "standard-v1" \
+  --public-ip \
+  --version "1.20"
+  
+ #-----------------
+ 
+ yc container node-group create --cluster-name <postgresha> --cores <2> --core-fraction <2> --disk-size <30> --disk-type <network-ssd> --fixed-size <3> --location <ru-central1-a> --memory <2> --name <pod_psql> --network-acceleration-type <standard> --network-interface security-group-ids=[<pod_network>],subnets=[<10.96.0.0/16>],ipv4-address=<nat> --platform-id <standard-v1> --public-ip --version <1.20>
+
+ строка:1 знак:48
++  yc container node-group create --cluster-name <postgresha> --cores < ...
++                                                ~
+Оператор "<" зарезервирован для использования в будущем.
+строка:1 знак:70
++ ... ainer node-group create --cluster-name <postgresha> --cores <2> --cor ...
++                                                                  ~
+Отсутствует спецификация файла после оператора перенаправления.
+ #----------------- 
+  
+ yc container node-group create \
+  --cluster-name 'postgresha' \
+  --cores '2' \
+  --core-fraction '2' \
+  --disk-size '30' \
+  --disk-type 'network-ssd' \
+  --fixed-size '3' \
+  --location 'ru-central1-a' \
+  --memory '2' \
+  --name 'pod_psql' \
+  --network-acceleration-type 'standard' \
+  --network-interface security-group-ids=['pod_network'],subnets=['10.96.0.0/16'],ipv4-address='nat' \
+  --platform-id 'standard-v1' \
+  --public-ip \
+  --version '1.20'
+  
+  строка:2 знак:5
++   --cluster-name 'postgresha' \
++     ~
+Отсутствует выражение после унарного оператора "--".
+строка:2 знак:5
++   --cluster-name 'postgresha' \
++     ~~~~~~~~~~~~
+Непредвиденная лексема "cluster-name" в выражении или операторе.
+строка:3 знак:5
++   --cores '2' \
++     ~
+Отсутствует выражение после унарного оператора "--".
+строка:3 знак:5
++   --cores '2' \
++     ~~~~~
+Непредвиденная лексема "cores" в выражении или операторе.
+строка:4 знак:5
++   --core-fraction '2' \
+...
+...
+...
+
+#-----------------
+
+
+  PS C:\Users\house>  yc container node-group create \
+>>   --cluster-name "postgresha" \
+>>   --cores "2" \
+>>   --core-fraction "2" \
+>>   --disk-size "30" \
+>>   --disk-type "network-ssd" \
+>>   --fixed-size "3" \
+>>   --location "ru-central1-a" \
+>>   --memory "2" \
+>>   --name "pod_psql" \
+>>   --network-acceleration-type "standard" \
+>>   --network-interface security-group-ids=["pod_network"],subnets=["10.96.0.0/16"],ipv4-address="nat" \
+>>   --platform-id "standard-v1" \
+>>   --public-ip \
+>>   --version "1.20"
+строка:2 знак:5
++   --cluster-name "postgresha" \
++     ~
+Отсутствует выражение после унарного оператора "--".
+строка:2 знак:5
++   --cluster-name "postgresha" \
++     ~~~~~~~~~~~~
+Непредвиденная лексема "cluster-name" в выражении или операторе.
+строка:3 знак:5
++   --cores "2" \
++     ~
+Отсутствует выражение после унарного оператора "--".
+строка:3 знак:5
++   --cores "2" \
++     ~~~~~
+Непредвиденная лексема "cores" в выражении или операторе.
+строка:4 знак:5
++   --core-fraction "2" \
++     ~
+Отсутствует выражение после унарного оператора "--".
+строка:4 знак:5
++   --core-fraction "2" \
++     ~~~~~~~~~~~~~
+Непредвиденная лексема "core-fraction" в выражении или операторе.
+строка:5 знак:5
++   --disk-size "30" \
++     ~
+Отсутствует выражение после унарного оператора "--".
+строка:5 знак:5
++   --disk-size "30" \
++     ~~~~~~~~~
+Непредвиденная лексема "disk-size" в выражении или операторе.
+строка:6 знак:5
++   --disk-type "network-ssd" \
++     ~
+Отсутствует выражение после унарного оператора "--".
+строка:6 знак:5
++   --disk-type "network-ssd" \
++     ~~~~~~~~~
+Непредвиденная лексема "disk-type" в выражении или операторе.
+Выданы сообщения не обо всех ошибках синтаксического анализа.  Исправьте перечисленные в сообщениях ошибки и повторите попытку.
+    + CategoryInfo          : ParserError: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : MissingExpressionAfterOperator
