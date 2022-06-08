@@ -1,5 +1,4 @@
 
-
 #СОздал кластер куба в вебинтрфейсе яндекс клауда
 
 #Выполнил инициализацию
@@ -16,7 +15,7 @@ PS C:\Users\house> yc container cluster list
 +----------------------+------------+---------------------+---------+---------+-----------------------+---------------------+
 
 #Список node postgresha 
-PS C:\Users\house> yc container cluster list-node-groups catnh4ppjut3hu3bofiv
+PS C:\Users\house>  container cluster list-node-groups catnh4ppjut3hu3bofiv
 +----+------+-------------------+------------+--------+------+
 | ID | NAME | INSTANCE GROUP ID | CREATED AT | STATUS | SIZE |
 +----+------+-------------------+------------+--------+------+
@@ -155,3 +154,69 @@ https://cloud.yandex.ru/docs/cli/cli-ref/managed-services/container/node-group/c
 Выданы сообщения не обо всех ошибках синтаксического анализа.  Исправьте перечисленные в сообщениях ошибки и повторите попытку.
     + CategoryInfo          : ParserError: (:) [], ParentContainsErrorRecordException
     + FullyQualifiedErrorId : MissingExpressionAfterOperator
+	
+
+
+
+
+#-----------------------------------------------------------------------------------
+Создал группу узлов в вебинтерфейсе
+
+PS C:\Users\house> yc container cluster list-node-groups catnh4ppjut3hu3bofiv
++----------------------+------+----------------------+---------------------+---------+------+
+|          ID          | NAME |  INSTANCE GROUP ID   |     CREATED AT      | STATUS  | SIZE |
++----------------------+------+----------------------+---------------------+---------+------+
+| catt3m3qd6t80lj5fc9q | yc   | cl119apts3b2ct3vssgm | 2022-06-08 19:27:53 | RUNNING |    3 |
++----------------------+------+----------------------+---------------------+---------+------+
+
+#проверил поды
+PS C:\Users\house> kubectl get all
+NAME                 TYPE        CLUSTER-IP    EXTERNAL-IP   PORT(S)   AGE
+service/kubernetes   ClusterIP   10.96.128.1   <none>        443/TCP   29h
+
+#Проверил ноды
+PS C:\Users\house> kubectl get nodes
+NAME                        STATUS   ROLES    AGE   VERSION
+cl119apts3b2ct3vssgm-amuc   Ready    <none>   14m   v1.20.11
+cl119apts3b2ct3vssgm-ohuh   Ready    <none>   14m   v1.20.11
+cl119apts3b2ct3vssgm-udil   Ready    <none>   14m   v1.20.11
+
+
+
+#
+PS C:\Users\house> helm repo add bitnami https://charts.bitnami.com/bitnami
+helm : Имя "helm" не распознано как имя командлета, функции, файла сценария или выполняемой программы. Проверьте правильность написания имени, а также наличие и правильность пути, после чего пов
+торите попытку.
+строка:1 знак:1
++ helm repo add bitnami https://charts.bitnami.com/bitnami
++ ~~~~
+    + CategoryInfo          : ObjectNotFound: (helm:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+
+# хелм был не установлен, скачал 
+
+PS C:\Users\house\windows-amd64> ls
+
+
+    Каталог: C:\Users\house\windows-amd64
+
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a----        08.06.2022     23:12       47387648 helm.exe
+-a----        08.06.2022     23:12          11373 LICENSE
+-a----        08.06.2022     23:12           3367 README.md
+
+
+PS C:\Users\house\windows-amd64> helm.exe create example
+helm.exe : Имя "helm.exe" не распознано как имя командлета, функции, файла сценария или выполняемой программы. Проверьте правильность написан
+ия имени, а также наличие и правильность пути, после чего повторите попытку.
+строка:1 знак:1
++ helm.exe create example
++ ~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (helm.exe:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+
+Suggestion [3,General]: Команда helm.exe не найдена, однако существует в текущем расположении. По умолчанию оболочка Windows PowerShell не загружает команды из текущего расположения. Если вы уверены в надежности команды, введите ".\helm.exe". Для получения дополнительных сведений вызовите справку с помощью команды "get-help about_Command_Precedence".
