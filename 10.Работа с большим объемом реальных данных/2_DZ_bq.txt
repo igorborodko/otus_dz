@@ -1,0 +1,138 @@
+#--
+house@posgres-bq2:~$ sudo apt install git
+
+#--
+house@posgres-bq2:~$ git clone https://github.com/toddwschneider/nyc-taxi-data.git
+Cloning into 'nyc-taxi-data'...
+remote: Enumerating objects: 737, done.
+remote: Counting objects: 100% (80/80), done.
+remote: Compressing objects: 100% (38/38), done.
+remote: Total 737 (delta 45), reused 74 (delta 42), pack-reused 657
+Receiving objects: 100% (737/737), 48.43 MiB | 21.60 MiB/s, done.
+Resolving deltas: 100% (251/251), done.
+
+#--
+house@posgres-bq2:~/nyc-taxi-data$ ls
+analysis             download_raw_2014_uber_data.sh  import_fhv_trip_data.sh  LICENSE             setup_files
+citibike_comparison  download_raw_data.sh            import_trip_data.sh      README.md           shapefiles
+data                 import_2014_uber_trip_data.sh   initialize_database.sh   remove_bad_rows.sh  tlc_statistics
+
+#--Получаю ошибки ERROR 404: Not Found.
+house@posgres-bq2:~/nyc-taxi-data$ ./download_raw_data.sh
+--2022-06-14 19:15:48--  https://s3.amazonaws.com/nyc-tlc/trip+data/fhv_tripdata_2015-02.csv
+--2022-06-14 19:15:48--  https://s3.amazonaws.com/nyc-tlc/trip+data/fhv_tripdata_2015-01.csv
+Resolving s3.amazonaws.com (s3.amazonaws.com)... --2022-06-14 19:15:48--  https://s3.amazonaws.com/nyc-tlc/trip+data/fhv_tripdata_2015-04.csv
+--2022-06-14 19:15:48--  https://s3.amazonaws.com/nyc-tlc/trip+data/fhv_tripdata_2015-03.csv
+Resolving s3.amazonaws.com (s3.amazonaws.com)... Resolving s3.amazonaws.com (s3.amazonaws.com)... --2022-06-14 19:15:48--  https://s3.amazonaws.com/nyc-tlc/trip+data/fhv_tripdata_2015-05.csv
+Resolving s3.amazonaws.com (s3.amazonaws.com)... --2022-06-14 19:15:48--  https://s3.amazonaws.com/nyc-tlc/trip+data/fhv_tripdata_2015-06.csv
+Resolving s3.amazonaws.com (s3.amazonaws.com)... Resolving s3.amazonaws.com (s3.amazonaws.com)... 52.217.99.13452.217.99.134
+Connecting to s3.amazonaws.com (s3.amazonaws.com)|52.217.99.134|:443... 52.217.99.134
+Connecting to s3.amazonaws.com (s3.amazonaws.com)|52.217.99.134|:443...
+Connecting to s3.amazonaws.com (s3.amazonaws.com)|52.217.99.134|:443... 52.217.99.134
+Connecting to s3.amazonaws.com (s3.amazonaws.com)|52.217.99.134|:443... 52.217.99.134
+Connecting to s3.amazonaws.com (s3.amazonaws.com)|52.217.99.134|:443... 52.217.99.134
+Connecting to s3.amazonaws.com (s3.amazonaws.com)|52.217.99.134|:443... connected.
+connected.
+connected.
+connected.
+connected.
+connected.
+HTTP request sent, awaiting response... HTTP request sent, awaiting response... HTTP request sent, awaiting response... HTTP request sent, awaiting response... HTTP request sent, awaiting response... HTTP request sent, awaiting response... 404 Not Found
+2022-06-14 19:15:49 ERROR 404: Not Found.
+
+--2022-06-14 19:15:49--  https://s3.amazonaws.com/nyc-tlc/trip+data/fhv_tripdata_2015-07.csv
+404 Not Found
+2022-06-14 19:15:49 ERROR 404: Not Found.
+
+Resolving s3.amazonaws.com (s3.amazonaws.com)... --2022-06-14 19:15:49--  https://s3.amazonaws.com/nyc-tlc/trip+data/fhv_tripdata_2015-08.csv
+Resolving s3.amazonaws.com (s3.amazonaws.com)... 404 Not Found
+2022-06-14 19:15:49 ERROR 404: Not Found.
+
+404 Not Found
+2022-06-14 19:15:49 ERROR 404: Not Found.
+
+...
+...
+...
+
+--2022-06-14 19:15:50--  https://s3.amazonaws.com/nyc-tlc/trip+data/fhv_tripdata_2016-06.csv
+Resolving s3.amazonaws.com (s3.amazonaws.com)... 52.217.99.134
+Connecting to s3.amazonaws.com (s3.amazonaws.com)|52.217.99.134|:443... connected.
+connected.
+connected.
+connected.
+connected.
+connected.
+HTTP request sent, awaiting response... HTTP request sent, awaiting response... HTTP request sent, awaiting response... HTTP request sent, awaiting response... HTTP request sent, awaiting response... HTTP request sent, awaiting response... 404 Not Found
+2022-06-14 19:15:50 ERROR 404: Not Found.
+
+--2022-06-14 19:15:50--  https://s3.amazonaws.com/nyc-tlc/trip+data/fhv_tripdata_2016-07.csv
+Resolving s3.amazonaws.com (s3.amazonaws.com)... 52.217.99.134
+Connecting to s3.amazonaws.com (s3.amazonaws.com)|52.217.99.134|:443... 404 Not Found
+2022-06-14 19:15:50 ERROR 404: Not Found.
+
+--2022-06-14 19:15:50--  https://s3.amazonaws.com/nyc-tlc/trip+data/fhv_tripdata_2016-08.csv
+Resolving s3.amazonaws.com (s3.amazonaws.com)... 404 Not Found
+2022-06-14 19:15:50 ERROR 404: Not Found.
+
+52.217.99.134
+Connecting to s3.amazonaws.com (s3.amazonaws.com)|52.217.99.134|:443... --2022-06-14 19:15:50--  https://s3.amazonaws.com/nyc-tlc/trip+data/fhv_tripdata_2016-09.csv
+Resolving s3.amazonaws.com (s3.amazonaws.com)... 404 Not Found
+2022-06-14 19:15:50 ERROR 404: Not Found.
+...
+...
+...
+
+
+#--Скачал меньше кусок - завис, но вроде скачалось.
+house@posgres-bq2:~/nyc-taxi-data$ ./download_raw_2014_uber_data.sh
+--2022-06-14 19:17:27--  https://raw.githubusercontent.com/fivethirtyeight/uber-tlc-foil-response/master/uber-trip-data/uber-raw-data-apr14.csv
+--2022-06-14 19:17:27--  https://raw.githubusercontent.com/fivethirtyeight/uber-tlc-foil-response/master/uber-trip-data/uber-raw-data-may14.csv
+Resolving raw.githubusercontent.com (raw.githubusercontent.com)... Resolving raw.githubusercontent.com (raw.githubusercontent.com)... --2022-06-14 19:17:27--  https://raw.githubusercontent.com/fivethirtyeight/uber-tlc-foil-response/master/uber-trip-data/uber-raw-data-jun14.csv
+--2022-06-14 19:17:27--  https://raw.githubusercontent.com/fivethirtyeight/uber-tlc-foil-response/master/uber-trip-data/uber-raw-data-jul14.csv
+Resolving raw.githubusercontent.com (raw.githubusercontent.com)... Resolving raw.githubusercontent.com (raw.githubusercontent.com)... --2022-06-14 19:17:27--  https://raw.githubusercontent.com/fivethirtyeight/uber-tlc-foil-response/master/uber-trip-data/uber-raw-data-aug14.csv
+--2022-06-14 19:17:27--  https://raw.githubusercontent.com/fivethirtyeight/uber-tlc-foil-response/master/uber-trip-data/uber-raw-data-sep14.csv
+Resolving raw.githubusercontent.com (raw.githubusercontent.com)... Resolving raw.githubusercontent.com (raw.githubusercontent.com)... 185.199.109.133185.199.109.133185.199.109.133, 185.199.110.133, 185.199.111.133, ...
+Connecting to raw.githubusercontent.com (raw.githubusercontent.com)|185.199.109.133|:443... 185.199.109.133, 185.199.110.133, 185.199.111.133, ...
+Connecting to raw.githubusercontent.com (raw.githubusercontent.com)|185.199.109.133|:443... , 185.199.110.133, 185.199.111.133, ...
+Connecting to raw.githubusercontent.com (raw.githubusercontent.com)|185.199.109.133|:443... , 185.199.109.133, 185.199.110.133, 185.199.111.133, ...
+Connecting to raw.githubusercontent.com (raw.githubusercontent.com)|185.199.109.133|:443... 185.199.110.133, 185.199.111.133, ...
+185.199.109.133, 185.199.110.133, 185.199.111.133, ...
+Connecting to raw.githubusercontent.com (raw.githubusercontent.com)|185.199.109.133|:443... Connecting to raw.githubusercontent.com (raw.githubusercontent.com)|185.199.109.133|:443... connected.
+connected.
+connected.
+connected.
+connected.
+connected.
+HTTP request sent, awaiting response... HTTP request sent, awaiting response... 200 OK
+Length: 30695600 (29M) [text/plain]
+Saving to: ‘data/uber-raw-data-jun14.csv’
+
+uber-raw-data-jun14.csv       100%[=================================================>]  29.27M  46.3MB/s    in 0.6s
+
+2022-06-14 19:17:30 (46.3 MB/s) - ‘data/uber-raw-data-jun14.csv’ saved [30695600/30695600]
+
+200 OK
+Length: 47540750 (45M) [text/plain]
+Saving to: ‘data/uber-raw-data-sep14.csv’
+
+uber-raw-data-sep14.csv       100%[=================================================>]  45.34M  52.6MB/s    in 0.9s
+
+2022-06-14 19:17:31 (52.6 MB/s) - ‘data/uber-raw-data-sep14.csv’ saved [47540750/47540750]
+
+^Chouse@posgres-bq2:~/nyc-taxi-data$
+
+
+house@posgres-bq2:~/nyc-taxi-data$ sudo su - postgres
+postgres@posgres-bq2:~$ ./initialize_database.sh
+-bash: ./initialize_database.sh: No such file or directory
+postgres@posgres-bq2:~$ ./import_2014_uber_trip_data.sh
+-bash: ./import_2014_uber_trip_data.sh: No such file or directory
+
+
+postgres@posgres-bq2:~$ exit
+logout
+house@posgres-bq2:~/nyc-taxi-data$ ls
+analysis             download_raw_2014_uber_data.sh  import_fhv_trip_data.sh  LICENSE             setup_files
+citibike_comparison  download_raw_data.sh            import_trip_data.sh      README.md           shapefiles
+data                 import_2014_uber_trip_data.sh   initialize_database.sh   remove_bad_rows.sh  tlc_statistics
