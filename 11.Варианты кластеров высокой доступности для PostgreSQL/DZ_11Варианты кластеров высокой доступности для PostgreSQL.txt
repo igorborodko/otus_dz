@@ -220,3 +220,91 @@ helm.exe : Имя "helm.exe" не распознано как имя коман�
 
 
 Suggestion [3,General]: Команда helm.exe не найдена, однако существует в текущем расположении. По умолчанию оболочка Windows PowerShell не загружает команды из текущего расположения. Если вы уверены в надежности команды, введите ".\helm.exe". Для получения дополнительных сведений вызовите справку с помощью команды "get-help about_Command_Precedence".
+
+
+#
+#
+#
+#
+#
+#
+#
+#
+# 2 часть
+
+#--Установил choco, helm, добавил репу
+PS C:\Users\house> helm repo add bitnami https://charts.bitnami.com/bitnami
+>>
+"bitnami" already exists with the same configuration, skipping
+
+#--ПОлучил ошибку
+PS C:\Users\house> helm install my-release bitnami/postgresql-ha
+Error: INSTALLATION FAILED: failed to download "bitnami/postgresql-ha"
+
+
+#--Обновил helm
+PS C:\Users\house> helm repo update
+Hang tight while we grab the latest from your chart repositories...
+...Successfully got an update from the "bitnami" chart repository
+Update Complete. ⎈Happy Helming!⎈
+
+#--install Успех
+PS C:\Users\house> helm install my-release bitnami/postgresql-ha
+NAME: my-release
+LAST DEPLOYED: Wed Jun 15 00:34:42 2022
+NAMESPACE: default
+STATUS: deployed
+REVISION: 1
+TEST SUITE: None
+NOTES:
+CHART NAME: postgresql-ha
+CHART VERSION: 9.1.5
+APP VERSION: 14.3.0
+** Please be patient while the chart is being deployed **
+PostgreSQL can be accessed through Pgpool via port 5432 on the following DNS name from within your cluster:
+
+    my-release-postgresql-ha-pgpool.default.svc.cluster.local
+
+Pgpool acts as a load balancer for PostgreSQL and forward read/write connections to the primary node while read-only connections are forwarded to standby nodes.
+
+To get the password for "postgres" run:
+
+    export POSTGRES_PASSWORD=$(kubectl get secret --namespace default my-release-postgresql-ha-postgresql -o jsonpath="{.data.postgresql-password}" | base64 -d)
+
+To get the password for "repmgr" run:
+
+    export REPMGR_PASSWORD=$(kubectl get secret --namespace default my-release-postgresql-ha-postgresql -o jsonpath="{.data.repmgr-password}" | base64 -d)
+
+To connect to your database run the following command:
+
+    kubectl run my-release-postgresql-ha-client --rm --tty -i --restart='Never' --namespace default --image docker.io/bitnami/postgresql-repmgr:14.3.0-debian-11-r3 --env="PGPASSWORD=$POSTGRES_PASSWORD"  \
+        --command -- psql -h my-release-postgresql-ha-pgpool -p 5432 -U postgres -d postgres
+
+To connect to your database from outside the cluster execute the following commands:
+
+    kubectl port-forward --namespace default svc/my-release-postgresql-ha-pgpool 5432:5432 &
+    psql -h 127.0.0.1 -p 5432 -U postgres -d postgres
+	
+	
+PS C:\Users\house> kubectl get all
+NAME                                                   READY   STATUS    RESTARTS   AGE
+pod/my-release-postgresql-ha-pgpool-6db8886b5b-lmt4g   1/1     Running   0          5m
+pod/my-release-postgresql-ha-postgresql-0              1/1     Running   0          5m
+pod/my-release-postgresql-ha-postgresql-1              1/1     Running   0          5m
+pod/my-release-postgresql-ha-postgresql-2              1/1     Running   0          4m59s
+
+NAME                                                   TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+service/kubernetes                                     ClusterIP   10.96.128.1     <none>        443/TCP    7d7h
+service/my-release-postgresql-ha-pgpool                ClusterIP   10.96.200.246   <none>        5432/TCP   5m
+service/my-release-postgresql-ha-postgresql            ClusterIP   10.96.227.67    <none>        5432/TCP   5m
+service/my-release-postgresql-ha-postgresql-headless   ClusterIP   None            <none>        5432/TCP   5m
+
+NAME                                              READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/my-release-postgresql-ha-pgpool   1/1     1            1           5m1s
+
+NAME                                                         DESIRED   CURRENT   READY   AGE
+replicaset.apps/my-release-postgresql-ha-pgpool-6db8886b5b   1         1         1       5m1s
+
+NAME                                                   READY   AGE
+statefulset.apps/my-release-postgresql-ha-postgresql   3/3     5m1s
+
