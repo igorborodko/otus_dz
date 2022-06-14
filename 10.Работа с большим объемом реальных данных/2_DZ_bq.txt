@@ -1,3 +1,5 @@
+
+
 #--
 house@posgres-bq2:~$ sudo apt install git
 
@@ -17,7 +19,7 @@ analysis             download_raw_2014_uber_data.sh  import_fhv_trip_data.sh  LI
 citibike_comparison  download_raw_data.sh            import_trip_data.sh      README.md           shapefiles
 data                 import_2014_uber_trip_data.sh   initialize_database.sh   remove_bad_rows.sh  tlc_statistics
 
-#--Получаю ошибки ERROR 404: Not Found.
+#--Получаю ошибки по репам ERROR 404: Not Found.
 house@posgres-bq2:~/nyc-taxi-data$ ./download_raw_data.sh
 --2022-06-14 19:15:48--  https://s3.amazonaws.com/nyc-tlc/trip+data/fhv_tripdata_2015-02.csv
 --2022-06-14 19:15:48--  https://s3.amazonaws.com/nyc-tlc/trip+data/fhv_tripdata_2015-01.csv
@@ -123,16 +125,92 @@ uber-raw-data-sep14.csv       100%[=============================================
 ^Chouse@posgres-bq2:~/nyc-taxi-data$
 
 
-house@posgres-bq2:~/nyc-taxi-data$ sudo su - postgres
-postgres@posgres-bq2:~$ ./initialize_database.sh
--bash: ./initialize_database.sh: No such file or directory
-postgres@posgres-bq2:~$ ./import_2014_uber_trip_data.sh
--bash: ./import_2014_uber_trip_data.sh: No such file or directory
+#--
+postgres@posgres-bq2:/home/house/nyc-taxi-data$ ./import_2014_uber_trip_data.sh
+Tue 14 Jun 2022 07:42:47 PM UTC: beginning load for data/uber-raw-data-jun14.csv
+psql: error: connection to server on socket "/var/run/postgresql/.s.PGSQL.5432" failed: FATAL:  database "nyc-taxi-data" does not exist
+Tue 14 Jun 2022 07:42:47 PM UTC: finished raw load for data/uber-raw-data-jun14.csv
+Tue 14 Jun 2022 07:42:47 PM UTC: beginning load for data/uber-raw-data-sep14.csv
+psql: error: connection to server on socket "/var/run/postgresql/.s.PGSQL.5432" failed: FATAL:  database "nyc-taxi-data" does not exist
+Tue 14 Jun 2022 07:42:47 PM UTC: finished raw load for data/uber-raw-data-sep14.csv
+psql: error: connection to server on socket "/var/run/postgresql/.s.PGSQL.5432" failed: FATAL:  database "nyc-taxi-data" does not exist
 
+#--
+postgres@posgres-bq2:/home/house/nyc-taxi-data$ ./initialize_database.sh
+psql:setup_files/create_nyc_taxi_schema.sql:1: ERROR:  could not open extension control file "/usr/share/postgresql/14/extension/postgis.control": No such file or directory
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE INDEX
+CREATE TABLE
+INSERT 0 4
+CREATE TABLE
+INSERT 0 2
+CREATE TABLE
+CREATE TABLE
+./initialize_database.sh: line 7: shp2pgsql: command not found
+ERROR:  relation "taxi_zones" does not exist
+ERROR:  relation "taxi_zones" does not exist
+./initialize_database.sh: line 11: shp2pgsql: command not found
+psql:setup_files/add_newark_airport.sql:7: ERROR:  relation "nyct2010" does not exist
+LINE 1: INSERT INTO nyct2010
+                    ^
+ERROR:  relation "nyct2010" does not exist
+ERROR:  relation "nyct2010" does not exist
+psql:setup_files/add_tract_to_zone_mapping.sql:8: ERROR:  relation "nyct2010" does not exist
+LINE 6: FROM nyct2010 ct, taxi_zones tz
+             ^
+psql:setup_files/add_tract_to_zone_mapping.sql:10: ERROR:  relation "nyct2010_taxi_zones_mapping" does not exist
+psql:setup_files/add_tract_to_zone_mapping.sql:11: ERROR:  relation "nyct2010_taxi_zones_mapping" does not exist
+COPY 1097
+COPY 4595
+UPDATE 0
 
-postgres@posgres-bq2:~$ exit
-logout
-house@posgres-bq2:~/nyc-taxi-data$ ls
+#--
+postgres@posgres-bq2:/home/house/nyc-taxi-data$ ls
 analysis             download_raw_2014_uber_data.sh  import_fhv_trip_data.sh  LICENSE             setup_files
 citibike_comparison  download_raw_data.sh            import_trip_data.sh      README.md           shapefiles
 data                 import_2014_uber_trip_data.sh   initialize_database.sh   remove_bad_rows.sh  tlc_statistics
+
+#--Что то скопировало
+postgres@posgres-bq2:/home/house/nyc-taxi-data$ psql
+psql (14.3 (Ubuntu 14.3-1.pgdg20.04+1))
+Type "help" for help.
+
+#--Создалась только база, данные не скопировались.
+postgres-# \l
+                                    List of databases
+     Name      |  Owner   | Encoding |   Collate   |    Ctype    |   Access privileges
+---------------+----------+----------+-------------+-------------+-----------------------
+ nyc-taxi-data | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 |
+ postgres      | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 |
+ template0     | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | =c/postgres          +
+               |          |          |             |             | postgres=CTc/postgres
+ template1     | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | =c/postgres          +
+               |          |          |             |             | postgres=CTc/postgres
+(4 rows)
+
+#--
+postgres=# \l+
+                                                                      List of databases
+     Name      |  Owner   | Encoding |   Collate   |    Ctype    |   Access privileges   |  Size   | Tablespace |                Description
+---------------+----------+----------+-------------+-------------+-----------------------+---------+------------+--------------------------------------------
+ nyc-taxi-data | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 |                       | 9721 kB | pg_default |
+ postgres      | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 |                       | 8553 kB | pg_default | default administrative connection database
+ template0     | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | =c/postgres          +| 8401 kB | pg_default | unmodifiable empty database
+               |          |          |             |             | postgres=CTc/postgres |         |            |
+ template1     | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | =c/postgres          +| 8553 kB | pg_default | default template for new databases
+               |          |          |             |             | postgres=CTc/postgres |         |            |
+(4 rows)
+
+#--
+postgres=# \c nyc-taxi-data
+You are now connected to database "nyc-taxi-data" as user "postgres".
+nyc-taxi-data=# \dl+
+      Large objects
+ ID | Owner | Description
+----+-------+-------------
+(0 rows)
