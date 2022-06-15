@@ -308,3 +308,21 @@ replicaset.apps/my-release-postgresql-ha-pgpool-6db8886b5b   1         1        
 NAME                                                   READY   AGE
 statefulset.apps/my-release-postgresql-ha-postgresql   3/3     5m1s
 
+
+#--Заменил имя pgsql-ha-postgresql-ha-pgpool на my-release-postgresql-ha-pgpool
+
+PS C:\Users\house> kubectl port-forward --namespace default svc/my-release-postgresql-ha-pgpool 5432:5432
+Forwarding from 127.0.0.1:5432 -> 5432
+Forwarding from [::1]:5432 -> 5432
+
+
+
+#--Вытащить пароль не получается	
+PS C:\Users\house> set POSTGRES_PASSWORD=$(kubectl get secret --namespace default my-release-postgresql-ha-postgresql -o jsonpath="{.data.postgresql-password}" | base64 --decode)
+base64 : Имя "base64" не распознано как имя командлета, функции, файла сценария или выполняемой программы. Проверьте правильность написания имени, а также наличие и правильность пути, по
+сле чего повторите попытку.
+строка:1 знак:144
++ ... postgresql -o jsonpath="{.data.postgresql-password}" | base64 --decod ...
++                                                            ~~~~~~
+    + CategoryInfo          : ObjectNotFound: (base64:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
