@@ -214,3 +214,71 @@ nyc-taxi-data=# \dl+
  ID | Owner | Description
 ----+-------+-------------
 (0 rows)
+
+
+
+
+
+---------------------------------------------------------------------------
+
+#--Скопировал один csv файл
+postgres=# create extension file_fdw;
+CREATE EXTENSION
+postgres=# create server pgcsv foreign data wrapper file_fdw;
+CREATE SERVER
+postgres=# create server pgcsv foreign data wrapper file_fdw;
+
+
+create foreign table taxi_trips_fdw_2 (
+unique_key text, 
+taxi_id text, 
+trip_start_timestamp TIMESTAMP, 
+trip_end_timestamp TIMESTAMP, 
+trip_seconds bigint, 
+trip_miles numeric, 
+pickup_census_tract bigint, 
+dropoff_census_tract bigint, 
+pickup_community_area bigint, 
+dropoff_community_area bigint, 
+fare numeric, 
+tips numeric, 
+tolls numeric, 
+extras numeric, 
+trip_total numeric, 
+payment_type text, 
+company text, 
+pickup_latitude numeric, 
+pickup_longitude numeric, 
+pickup_location text, 
+dropoff_latitude numeric, 
+dropoff_longitude numeric, 
+dropoff_location text
+)
+server pgcsv
+options(filename '/home/aeugene/taxi_data/taxi.csv.000000000000', format 'csv', header 'true', delimiter ',');
+
+
+
+postgres=# select count(*) from taxi_trips_fdw_2;
+ count
+--------
+ 668818
+(1 row)
+
+Time: 10662.897 ms (00:10.663)
+
+
+postgres=# create table taxi as select * from taxi_trips_fdw_2;
+SELECT 668818
+Time: 28011.456 ms (00:28.011)
+postgres=# select count(*) from taxi;
+ count
+--------
+ 668818
+(1 row)
+
+Time: 2114.090 ms (00:02.114)
+
+
+#--Так явно работает быстрее 10662.897 ms против 2114.090 ms
+#--Да, оперативки надо было по больше пихнуть.
