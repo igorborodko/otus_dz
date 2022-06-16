@@ -326,3 +326,12 @@ base64 : Имя "base64" не распознано как имя командл�
 +                                                            ~~~~~~
     + CategoryInfo          : ObjectNotFound: (base64:String) [], CommandNotFoundException
     + FullyQualifiedErrorId : CommandNotFoundException
+
+
+----------------------------------------------------------------------------------------------------
+
+#Установил git чтобы export отработал, но ничего не происходит
+house@Igor MINGW64 ~
+$ export POSTGRES_PASSWORD=$(kubectl get secret --namespace default my-release-postgresql-ha-postgresql -o jsonpath="{.data.postgresql-password}" | base64 --decode)
+
+house@Igor MINGW64 ~
