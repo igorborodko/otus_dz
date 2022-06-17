@@ -15,7 +15,7 @@ PS C:\Users\house> yc container cluster list
 +----------------------+------------+---------------------+---------+---------+-----------------------+---------------------+
 
 #Список node postgresha 
-PS C:\Users\house>  container cluster list-node-groups catnh4ppjut3hu3bofiv
+PS C:\Users\house> yc container cluster list-node-groups catnh4ppjut3hu3bofiv
 +----+------+-------------------+------------+--------+------+
 | ID | NAME | INSTANCE GROUP ID | CREATED AT | STATUS | SIZE |
 +----+------+-------------------+------------+--------+------+
@@ -221,7 +221,6 @@ helm.exe : Имя "helm.exe" не распознано как имя коман�
 
 Suggestion [3,General]: Команда helm.exe не найдена, однако существует в текущем расположении. По умолчанию оболочка Windows PowerShell не загружает команды из текущего расположения. Если вы уверены в надежности команды, введите ".\helm.exe". Для получения дополнительных сведений вызовите справку с помощью команды "get-help about_Command_Precedence".
 
-
 #
 #
 #
@@ -230,7 +229,7 @@ Suggestion [3,General]: Команда helm.exe не найдена, однак�
 #
 #
 #
-# 2 часть
+#
 
 #--Установил choco, helm, добавил репу
 PS C:\Users\house> helm repo add bitnami https://charts.bitnami.com/bitnami
@@ -309,6 +308,8 @@ NAME                                                   READY   AGE
 statefulset.apps/my-release-postgresql-ha-postgresql   3/3     5m1s
 
 
+
+
 #--Заменил имя pgsql-ha-postgresql-ha-pgpool на my-release-postgresql-ha-pgpool
 
 PS C:\Users\house> kubectl port-forward --namespace default svc/my-release-postgresql-ha-pgpool 5432:5432
@@ -317,7 +318,7 @@ Forwarding from [::1]:5432 -> 5432
 
 
 
-#--Вытащить пароль не получается	
+	
 PS C:\Users\house> set POSTGRES_PASSWORD=$(kubectl get secret --namespace default my-release-postgresql-ha-postgresql -o jsonpath="{.data.postgresql-password}" | base64 --decode)
 base64 : Имя "base64" не распознано как имя командлета, функции, файла сценария или выполняемой программы. Проверьте правильность написания имени, а также наличие и правильность пути, по
 сле чего повторите попытку.
@@ -326,12 +327,87 @@ base64 : Имя "base64" не распознано как имя командл�
 +                                                            ~~~~~~
     + CategoryInfo          : ObjectNotFound: (base64:String) [], CommandNotFoundException
     + FullyQualifiedErrorId : CommandNotFoundException
-
-
-----------------------------------------------------------------------------------------------------
-
-#Установил git чтобы export отработал, но ничего не происходит
+	
+	
+	
+#--Установил git чтобы export отработал, но ничего не происходит
 house@Igor MINGW64 ~
 $ export POSTGRES_PASSWORD=$(kubectl get secret --namespace default my-release-postgresql-ha-postgresql -o jsonpath="{.data.postgresql-password}" | base64 --decode)
 
 house@Igor MINGW64 ~
+
+
+
+
+
+
+-----------------------------------------------------------------------------------------------------------------------
+
+
+
+#--echo $POSTGRES_PASSWORD
+PS C:\Users\house> echo POSTGRES_PASSWORD=$(kubectl get secret --namespace default my-release-postgresql-ha-postgresql -o jsonpath="{.data.postgresql-password}")
+POSTGRES_PASSWORD=cjdCeWl2SXpzVg==
+
+#--Декодировал: r7ByivIzsV
+
+#--PGPASSWORD он не знает
+PS C:\Users\house> PGPASSWORD=$POSTGRES_PASSWORD psql -h 127.0.0.1 -p 5432 -U postgres -d postgres
+PGPASSWORD=$POSTGRES_PASSWORD : Имя "PGPASSWORD=$POSTGRES_PASSWORD" не распознано как имя командлета, функции, файла сц
+енария или выполняемой программы. Проверьте правильность написания имени, а также наличие и правильность пути, после че
+го повторите попытку.
+строка:1 знак:1
++ PGPASSWORD=$POSTGRES_PASSWORD psql -h 127.0.0.1 -p 5432 -U postgres - ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (PGPASSWORD=$POSTGRES_PASSWORD:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+
+#--psql тоже не знает 
+PS C:\Users\house> psql -h 127.0.0.1 -p 5432 -U postgres -d postgres
+psql : Имя "psql" не распознано как имя командлета, функции, файла сценария или выполняемой программы. Проверьте правильность написания имени, а также
+наличие и правильность пути, после чего повторите попытку.
+строка:1 знак:1
++ psql -h 127.0.0.1 -p 5432 -U postgres -d postgres
++ ~~~~
+    + CategoryInfo          : ObjectNotFound: (psql:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+
+
+#-- Ппопробовал через DBeaver - соединение отклонено.
+
+
+
+
+
+
+#--Настроил на WSL работу с Yandex Cloud
+
+
+house@Igor:~$ yc container cluster list-node-groups catnh4ppjut3hu3bofiv
++----------------------+------+----------------------+---------------------+---------+------+
+|          ID          | NAME |  INSTANCE GROUP ID   |     CREATED AT      | STATUS  | SIZE |
++----------------------+------+----------------------+---------------------+---------+------+
+| catt3m3qd6t80lj5fc9q | yc   | cl119apts3b2ct3vssgm | 2022-06-08 19:27:53 | RUNNING |    3 |
++----------------------+------+----------------------+---------------------+---------+------+
+
+
+house@Igor:~$ yc container cluster list-nodes catnh4ppjut3hu3bofiv
++--------------------------------+---------------------------+--------------------------------+-------------+--------+
+|         CLOUD INSTANCE         |      KUBERNETES NODE      |           RESOURCES            |    DISK     | STATUS |
++--------------------------------+---------------------------+--------------------------------+-------------+--------+
+| fhmjpop8niom2t5ndhoo           | cl119apts3b2ct3vssgm-amuc | 2 50% core(s), 2.0 GB of       | 64.0 GB hdd | READY  |
+| RUNNING_ACTUAL                 |                           | memory                         |             |        |
+| fhm09tbutv5isvjr92v6           | cl119apts3b2ct3vssgm-ohuh | 2 50% core(s), 2.0 GB of       | 64.0 GB hdd | READY  |
+| RUNNING_ACTUAL                 |                           | memory                         |             |        |
+| fhm671k8liu432lf13fl           | cl119apts3b2ct3vssgm-udil | 2 50% core(s), 2.0 GB of       | 64.0 GB hdd | READY  |
+| RUNNING_ACTUAL                 |                           | memory                         |             |        |
++--------------------------------+---------------------------+--------------------------------+-------------+--------+
+
+#--ПОлучил ошибку c портом
+house@Igor:~$ kubectl get all
+The connection to the server localhost:8080 was refused - did you specify the right host or port?
+
+
+
