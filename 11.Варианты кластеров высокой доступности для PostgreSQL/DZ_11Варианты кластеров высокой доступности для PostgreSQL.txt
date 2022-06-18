@@ -410,4 +410,38 @@ house@Igor:~$ kubectl get all
 The connection to the server localhost:8080 was refused - did you specify the right host or port?
 
 
+#--Нашел на форуме рекоммендации, выполнил
+https://discuss.kubernetes.io/t/the-connection-to-the-server-localhost-8080-was-refused-did-you-specify-the-right-host-or-port/1464/10
 
+house@Igor:~$ sudo cp /etc/kubernetes/admin.conf HOME/ sudo chown (id -u):$(id -g) $HOME/admin.conf
+-bash: syntax error near unexpected token `('
+house@Igor:~$ export KUBECONFIG=$HOME/admin.conf
+
+#--Проверил конфиг и версию
+
+house@Igor:~$ kubectl config view
+W0619 00:41:28.375016     431 loader.go:221] Config not found: /home/house/admin.conf
+apiVersion: v1
+clusters: null
+contexts: null
+current-context: ""
+kind: Config
+preferences: {}
+users: null
+house@Igor:~$ kubectl version -o json
+W0619 00:48:36.717389     440 loader.go:221] Config not found: /home/house/admin.conf
+{
+  "clientVersion": {
+    "major": "1",
+    "minor": "24",
+    "gitVersion": "v1.24.2",
+    "gitCommit": "f66044f4361b9f1f96f0053dd46cb7dce5e990a8",
+    "gitTreeState": "clean",
+    "buildDate": "2022-06-15T14:22:29Z",
+    "goVersion": "go1.18.3",
+    "compiler": "gc",
+    "platform": "linux/amd64"
+  },
+  "kustomizeVersion": "v4.5.4"
+}
+The connection to the server localhost:8080 was refused - did you specify the right host or port?
