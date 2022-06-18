@@ -445,3 +445,8 @@ W0619 00:48:36.717389     440 loader.go:221] Config not found: /home/house/admin
   "kustomizeVersion": "v4.5.4"
 }
 The connection to the server localhost:8080 was refused - did you specify the right host or port?
+
+#--Теперь еще конфиг не видит
+kubectl get all
+W0619 00:54:06.620393     450 loader.go:221] Config not found: /home/house/admin.conf
+The connection to the server localhost:8080 was refused - did you specify the right host or port?
