@@ -1,0 +1,216 @@
+
+
+house@cockroach1:~$ mkdir certs my-safe-directory
+house@cockroach1:~$ cockroach cert create-ca --certs-dir=certs --ca-key=my-safe-directory/ca.key
+house@cockroach1:~$ cockroach cert create-node localhost cockroach1 cockroach2 cockroach3 cockroach4 --certs-dir=certs --ca-key=my-safe-directory/ca.key --overwrite
+house@cockroach1:~$ cockroach cert create-client root --certs-dir=certs --ca-key=my-safe-directory/ca.key
+house@cockroach1:~$ cockroach cert list --certs-dir=certs
+Certificate directory: certs
+  Usage  | Certificate File |    Key File     |  Expires   |                              Notes                               | Error
+---------+------------------+-----------------+------------+------------------------------------------------------------------+--------
+  CA     | ca.crt           |                 | 2032/06/28 | num certs: 1                                                     |
+  Node   | node.crt         | node.key        | 2027/06/25 | addresses: localhost,cockroach1,cockroach2,cockroach3,cockroach4 |
+  Client | client.root.crt  | client.root.key | 2027/06/25 | user: root                                                       |
+(3 rows)
+
+-----------------------------------------------------
+
+house@Igor:/mnt/c/Users/house$ scp -r house@51.250.51.19:/home/house/certs /mnt/c/Users/house
+node.crt                                                                                                                          100% 1253    51.4KB/s   00:00
+ca.crt                                                                                                                            100% 1151    46.8KB/s   00:00
+client.root.key                                                                                                                   100% 1679    64.8KB/s   00:00
+client.root.crt                                                                                                                   100% 1147    47.3KB/s   00:00
+node.key                                                                                                                          100% 1675    67.5KB/s   00:00
+
+
+mkdir certs
+scp -r house@51.250.51.19:/home/house/certs /mnt/c/Users/house
+scp -r /mnt/c/Users/house/certs house@51.250.51.25:/home/house
+scp -r /mnt/c/Users/house/certs house@51.250.126.13:/home/house
+
+#На 3х нодах
+house@cockroach1:~$ cockroach start --certs-dir=certs --advertise-addr=cockroach1 --join=cockroach1,cockroach2,cockroach3 --cache=.25 --max-sql-memory=.25 --background
+*
+* INFO: initial startup completed.
+* Node will now attempt to join a running cluster, or wait for `cockroach init`.
+* Client connections will be accepted after this completes successfully.
+* Check the log file(s) for progress.
+
+
+#-- инициализируем кластер
+house@cockroach1:~$ cockroach init --certs-dir=certs --host=cockroach1
+Cluster successfully initialized
+
+#-- посмотрим статус кластера
+house@cockroach1:~$ cockroach node status --certs-dir=certs
+  id |     address      |   sql_address    |  build  |         started_at         |         updated_at         | locality | is_available | is_live
+-----+------------------+------------------+---------+----------------------------+----------------------------+----------+--------------+----------
+   1 | cockroach1:26257 | cockroach1:26257 | v21.1.6 | 2022-06-23 20:21:26.75686  | 2022-06-23 20:23:10.279078 |          | true         | true
+   2 | cockroach3:26257 | cockroach3:26257 | v21.1.6 | 2022-06-23 20:21:28.137967 | 2022-06-23 20:23:07.127604 |          | true         | true
+   3 | cockroach2:26257 | cockroach2:26257 | v21.1.6 | 2022-06-23 20:21:28.509686 | 2022-06-23 20:23:07.545867 |          | true         | true
+(3 rows)
+
+house@cockroach1:~$ cockroach sql --certs-dir=certs
+#
+# Welcome to the CockroachDB SQL shell.
+# All statements must be terminated by a semicolon.
+# To exit, type: \q.
+#
+# Server version: CockroachDB CCL v21.1.6 (x86_64-unknown-linux-gnu, built 2021/07/20 15:30:39, go1.15.11) (same version as client)
+# Cluster ID: 0ba92b46-b30e-4ae6-b47a-d54cb8a76b89
+No entry for terminal type "xterm-256color";
+using dumb terminal settings.
+#
+# Enter \? for a brief introduction.
+
+
+
+
+#-- Создал таблицу
+root@:26257/defaultdb> CREATE DATABASE bank;
+CREATE DATABASE
+
+Time: 17ms total (execution 17ms / network 0ms)
+
+
+root@:26257/defaultdb> show databases;
+  database_name | owner | primary_region | regions | survival_goal
+----------------+-------+----------------+---------+----------------
+  bank          | root  | NULL           | {}      | NULL
+  defaultdb     | root  | NULL           | {}      | NULL
+  postgres      | root  | NULL           | {}      | NULL
+  system        | node  | NULL           | {}      | NULL
+(4 rows)
+
+Time: 4ms total (execution 4ms / network 0ms)
+
+
+
+
+#-- Установил gsutil, наконец получилось скачать!!!!
+house@cockroach1:~/taxi_data$ gsutil -m cp -R gs://chicago10/taxi.csv.0000000000[0-3]* .
+Copying gs://chicago10/taxi.csv.000000000000...
+Copying gs://chicago10/taxi.csv.000000000001...
+Copying gs://chicago10/taxi.csv.000000000005...
+Copying gs://chicago10/taxi.csv.000000000007...
+Copying gs://chicago10/taxi.csv.000000000003...
+Copying gs://chicago10/taxi.csv.000000000008...
+Copying gs://chicago10/taxi.csv.000000000009...
+Copying gs://chicago10/taxi.csv.000000000002...
+Copying gs://chicago10/taxi.csv.000000000004...
+Copying gs://chicago10/taxi.csv.000000000006...
+Copying gs://chicago10/taxi.csv.000000000010...10.2 MiB/s ETA 00:14:31
+Copying gs://chicago10/taxi.csv.000000000011...10.3 MiB/s ETA 00:14:27
+Copying gs://chicago10/taxi.csv.000000000012...30.9 MiB/s ETA 00:04:44
+Copying gs://chicago10/taxi.csv.000000000013...36.0 MiB/s ETA 00:03:33
+Copying gs://chicago10/taxi.csv.000000000014...19.0 MiB/s ETA 00:06:43
+Copying gs://chicago10/taxi.csv.000000000015...17.2 MiB/s ETA 00:07:24
+Copying gs://chicago10/taxi.csv.000000000016...17.2 MiB/s ETA 00:07:24
+Copying gs://chicago10/taxi.csv.000000000017...
+Copying gs://chicago10/taxi.csv.000000000018...16.6 MiB/s ETA 00:07:40
+Copying gs://chicago10/taxi.csv.000000000019... 37.5 MiB/s ETA 00:03:17
+Copying gs://chicago10/taxi.csv.000000000020... 39.8 MiB/s ETA 00:02:41
+Copying gs://chicago10/taxi.csv.000000000021... 39.8 MiB/s ETA 00:02:41
+Copying gs://chicago10/taxi.csv.000000000022... 39.8 MiB/s ETA 00:02:41
+Copying gs://chicago10/taxi.csv.000000000023... 28.8 MiB/s ETA 00:03:41
+Copying gs://chicago10/taxi.csv.000000000024... 39.0 MiB/s ETA 00:02:12
+Copying gs://chicago10/taxi.csv.000000000026... 39.0 MiB/s ETA 00:02:12
+Copying gs://chicago10/taxi.csv.000000000025... 38.7 MiB/s ETA 00:02:13
+Copying gs://chicago10/taxi.csv.000000000027... 35.0 MiB/s ETA 00:02:26
+Copying gs://chicago10/taxi.csv.000000000028... 35.4 MiB/s ETA 00:02:24
+Copying gs://chicago10/taxi.csv.000000000029... 33.9 MiB/s ETA 00:02:29
+Copying gs://chicago10/taxi.csv.000000000031... 27.6 MiB/s ETA 00:02:18
+Copying gs://chicago10/taxi.csv.000000000030...
+Copying gs://chicago10/taxi.csv.000000000032... 27.4 MiB/s ETA 00:02:19
+Copying gs://chicago10/taxi.csv.000000000033... 32.7 MiB/s ETA 00:01:55
+Copying gs://chicago10/taxi.csv.000000000034... 27.8 MiB/s ETA 00:01:43
+Copying gs://chicago10/taxi.csv.000000000035... 25.3 MiB/s ETA 00:01:41
+Copying gs://chicago10/taxi.csv.000000000036... 21.6 MiB/s ETA 00:01:55
+Copying gs://chicago10/taxi.csv.000000000037... 21.2 MiB/s ETA 00:01:57
+Copying gs://chicago10/taxi.csv.000000000038...
+Copying gs://chicago10/taxi.csv.000000000039... 21.2 MiB/s ETA 00:01:57
+/ [40/40 files][ 10.0 GiB/ 10.0 GiB] 100% Done  38.4 MiB/s ETA 00:00:00
+Operation completed over 40 objects/10.0 GiB.
+
+
+root@:26257/defaultdb> show databases;
+  database_name | owner | primary_region | regions | survival_goal
+----------------+-------+----------------+---------+----------------
+  bank          | root  | NULL           | {}      | NULL
+  defaultdb     | root  | NULL           | {}      | NULL
+  postgres      | root  | NULL           | {}      | NULL
+  system        | node  | NULL           | {}      | NULL
+  taxi_trips    | root  | NULL           | {}      | NULL
+(5 rows)
+
+Time: 4ms total (execution 3ms / network 0ms)
+
+
+
+
+#--Пробовал скопировать пишет функция не реализована, может есть какой другой способ 
+#--Через create extension file_fdw; также функция не реализована пишет.
+
+
+root@:26257/defaultdb> COPY taxi_trips(unique_key,
+taxi_id,
+trip_start_timestamp,
+trip_end_timestamp,
+trip_seconds,
+trip_miles,
+pickup_census_tract,
+dropoff_census_tract,
+pickup_community_area,
+dropoff_community_area,
+fare,
+tips,
+tolls,
+extras,
+trip_total,
+payment_type,
+company,
+pickup_latitude,
+pickup_longitude,
+pickup_location,
+dropoff_latitude,
+dropoff_longitude,
+dropoff_location)
+FROM PROGRAM 'awk FNR-1 /house/taxi_data/taxi_trips_000000000000.csv | cat' DELIMITER ',' CSV HEADER;
+invalid syntax: statement ignored: at or near "program": syntax error: unimplemented: this syntax
+SQLSTATE: 0A000
+DETAIL: source SQL:
+COPY taxi_trips(unique_key,
+taxi_id,
+trip_start_timestamp,
+trip_end_timestamp,
+trip_seconds,
+trip_miles,
+pickup_census_tract,
+dropoff_census_tract,
+pickup_community_area,
+dropoff_community_area,
+fare,
+tips,
+tolls,
+extras,
+trip_total,
+payment_type,
+company,
+pickup_latitude,
+pickup_longitude,
+pickup_location,
+dropoff_latitude,
+dropoff_longitude,
+dropoff_location)
+FROM PROGRAM 'awk FNR-1 /house/taxi_data/taxi_trips_000000000000.csv | cat' DELIMITER ',' CSV HEADER
+     ^
+HINT: You have attempted to use a feature that is not yet implemented.
+
+Please check the public issue tracker to check whether this problem is
+already tracked. If you cannot find it there, please report the error
+with details by creating a new issue.
+
+If you would rather not post publicly, please contact us directly
+using the support form.
+
+We appreciate your feedback.
