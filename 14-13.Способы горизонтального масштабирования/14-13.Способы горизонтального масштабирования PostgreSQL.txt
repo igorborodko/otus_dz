@@ -214,3 +214,37 @@ If you would rather not post publicly, please contact us directly
 using the support form.
 
 We appreciate your feedback.
+
+
+
+
+
+
+
+--------------------------------------------------------------------------------------
+
+
+
+
+
+#Попробовал залить бакет такси напрямую из облака.
+
+root@:26257/taxi_trips> use taxi_trips
+root@:26257/taxi_trips> import INTO items (itemname, price, quantity) CSV DATA ('gs://chicago10/taxi.csv.000000000000') WITH DELIMITER = E'\t';
+ERROR: Get "https://storage.googleapis.com/chicago10/taxi.csv.000000000000": metadata: GCE metadata "instance/service-accounts/default/token?scopes=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fdevstorage.read_write" not defined
+
+#Затем Ваш бакет, думал ошибка где-то - ошибка с доступом(
+root@:26257/taxi_trips> use bank;
+SET
+
+Time: 9ms total (execution 9ms / network 0ms)
+
+root@:26257/bank> CREATE TABLE if not exists items (itemname varchar(128) primary key, price decimal(19,4), quantity int);
+CREATE TABLE
+
+Time: 18ms total (execution 17ms / network 0ms)
+
+root@:26257/bank> import INTO items (itemname, price, quantity) CSV DATA ('gs://postgres13/cockroachdb.csv') WITH DELIMITER = E'\t';
+ERROR: Get "https://storage.googleapis.com/postgres13/cockroachdb.csv": metadata: GCE metadata "instance/service-accounts/default/token?scopes=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fdevstorage.read_write" not defined
+
+
