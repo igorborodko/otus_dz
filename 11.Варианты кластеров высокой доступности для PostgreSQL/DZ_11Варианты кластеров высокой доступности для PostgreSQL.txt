@@ -450,3 +450,135 @@ The connection to the server localhost:8080 was refused - did you specify the ri
 kubectl get all
 W0619 00:54:06.620393     450 loader.go:221] Config not found: /home/house/admin.conf
 The connection to the server localhost:8080 was refused - did you specify the right host or port?
+
+
+
+
+
+
+----------------------------------------------------------------------------------------------------------
+
+
+
+
+
+#Перезаписал конфиг кластера и получилось подключиться к кластеру.
+
+house@Igor:~$ yc managed-kubernetes cluster \
+>   get-credentials catnh4ppjut3hu3bofiv  \
+>   --external
+ERROR: Context with name 'yc-postgresha' already exists in kubeconfig '/home/house/.kube/config'. You may call this command with '--force' flag to overwrite existing context or remove manually it using 'kubectl config unset contexts.yc-postgresha'
+
+
+house@Igor:~$ yc managed-kubernetes cluster   get-credentials catnh4ppjut3hu3bofiv    --external --force
+
+Context 'yc-postgresha' was added as default to kubeconfig '/home/house/.kube/config'.
+Check connection to cluster using 'kubectl cluster-info --kubeconfig /home/house/.kube/config'.
+
+Note, that authentication depends on 'yc' and its config profile 'default'.
+To access clusters using the Kubernetes API, please use Kubernetes Service Account.
+house@Igor:~$ kubectl cluster-info
+Kubernetes control plane is running at https://51.250.66.112
+CoreDNS is running at https://51.250.66.112/api/v1/namespaces/kube-system/services/kube-dns:dns/proxy
+Metrics-server is running at https://51.250.66.112/api/v1/namespaces/kube-system/services/https:metrics-server:/proxy
+
+To further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.
+house@Igor:~$ kubectl get all
+NAME                                                   READY   STATUS    RESTARTS   AGE
+pod/my-release-postgresql-ha-pgpool-6db8886b5b-4klwl   1/1     Running   12         2d3h
+pod/my-release-postgresql-ha-postgresql-0              1/1     Running   4          2d3h
+pod/my-release-postgresql-ha-postgresql-1              1/1     Running   13         2d3h
+pod/my-release-postgresql-ha-postgresql-2              1/1     Running   8          2d3h
+
+NAME                                                   TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+service/kubernetes                                     ClusterIP   10.96.128.1     <none>        443/TCP    19d
+service/my-release-postgresql-ha-pgpool                ClusterIP   10.96.200.246   <none>        5432/TCP   11d
+service/my-release-postgresql-ha-postgresql            ClusterIP   10.96.227.67    <none>        5432/TCP   11d
+service/my-release-postgresql-ha-postgresql-headless   ClusterIP   None            <none>        5432/TCP   11d
+
+NAME                                              READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/my-release-postgresql-ha-pgpool   1/1     1            1           11d
+
+NAME                                                         DESIRED   CURRENT   READY   AGE
+replicaset.apps/my-release-postgresql-ha-pgpool-6db8886b5b   1         1         1       11d
+
+NAME                                                   READY   AGE
+statefulset.apps/my-release-postgresql-ha-postgresql   3/3     11d
+
+
+
+
+
+#Установил install pgsql-ha bitnami/postgresql-ha 
+
+house@Igor:~$ helm repo add bitnami https://charts.bitnami.com/bitnami
+"bitnami" has been added to your repositories
+house@Igor:~$ helm install pgsql-ha bitnami/postgresql-ha
+NAME: pgsql-ha
+LAST DEPLOYED: Mon Jun 27 00:28:56 2022
+NAMESPACE: default
+STATUS: deployed
+REVISION: 1
+TEST SUITE: None
+NOTES:
+CHART NAME: postgresql-ha
+CHART VERSION: 9.1.9
+APP VERSION: 14.4.0
+** Please be patient while the chart is being deployed **
+PostgreSQL can be accessed through Pgpool via port 5432 on the following DNS name from within your cluster:
+
+    pgsql-ha-postgresql-ha-pgpool.default.svc.cluster.local
+
+Pgpool acts as a load balancer for PostgreSQL and forward read/write connections to the primary node while read-only connections are forwarded to standby nodes.
+
+To get the password for "postgres" run:
+
+    export POSTGRES_PASSWORD=$(kubectl get secret --namespace default pgsql-ha-postgresql-ha-postgresql -o jsonpath="{.data.postgresql-password}" | base64 -d)
+
+To get the password for "repmgr" run:
+
+    export REPMGR_PASSWORD=$(kubectl get secret --namespace default pgsql-ha-postgresql-ha-postgresql -o jsonpath="{.data.repmgr-password}" | base64 -d)
+
+To connect to your database run the following command:
+
+    kubectl run pgsql-ha-postgresql-ha-client --rm --tty -i --restart='Never' --namespace default --image docker.io/bitnami/postgresql-repmgr:14.4.0-debian-11-r3 --env="PGPASSWORD=$POSTGRES_PASSWORD"  \
+        --command -- psql -h pgsql-ha-postgresql-ha-pgpool -p 5432 -U postgres -d postgres
+
+To connect to your database from outside the cluster execute the following commands:
+
+    kubectl port-forward --namespace default svc/pgsql-ha-postgresql-ha-pgpool 5432:5432 &
+    psql -h 127.0.0.1 -p 5432 -U postgres -d postgres
+	
+	
+
+#-- достанем пароль
+house@Igor:~$ export POSTGRES_PASSWORD=$(kubectl get secret --namespace default pgsql-ha-postgresql-ha-postgresql -o jsonpath="{.data.postgresql-password}" | base64 --decode)
+house@Igor:~$ echo $POSTGRES_PASSWORD
+h579QvqnFx
+
+#-- Подключаюсь, отсутсвует клиент
+house@Igor:~$ psql -h 127.0.0.1 -p 5432 -U postgres -d postgres
+
+Command 'psql' not found, but can be installed with:
+
+sudo apt install postgresql-client-common
+
+#-- Установил клиента 
+sudo apt-get install postgresql-client
+
+#-- Пробросил порт
+house@Igor:~$ kubectl port-forward --namespace default svc/pgsql-ha-postgresql-ha-pgpool 5432:5432
+Forwarding from 127.0.0.1:5432 -> 5432
+Forwarding from [::1]:5432 -> 5432
+Handling connection for 5432
+
+#-- Ураааааа
+
+house@Igor:~$ PGPASSWORD=$POSTGRES_PASSWORD psql -h 127.0.0.1 -p 5432 -U postgres -d postgres
+Password for user postgres:
+psql (12.11 (Ubuntu 12.11-0ubuntu0.20.04.1), server 14.4)
+WARNING: psql major version 12, server major version 14.
+         Some psql features might not work.
+Type "help" for help.
+
+postgres=# 
