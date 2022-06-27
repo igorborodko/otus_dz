@@ -248,3 +248,68 @@ root@:26257/bank> import INTO items (itemname, price, quantity) CSV DATA ('gs://
 ERROR: Get "https://storage.googleapis.com/postgres13/cockroachdb.csv": metadata: GCE metadata "instance/service-accounts/default/token?scopes=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fdevstorage.read_write" not defined
 
 
+
+
+----------------------------------------------------------------------------------------
+
+
+
+
+
+root@:26257/defaultdb> show databases;
+  database_name | owner | primary_region | regions | survival_goal
+----------------+-------+----------------+---------+----------------
+  bank          | root  | NULL           | {}      | NULL
+  defaultdb     | root  | NULL           | {}      | NULL
+  postgres      | root  | NULL           | {}      | NULL
+  system        | node  | NULL           | {}      | NULL
+  taxi_trips    | root  | NULL           | {}      | NULL
+  test          | root  | NULL           | {}      | NULL
+(6 rows)
+
+Time: 3ms total (execution 3ms / network 0ms)
+
+root@:26257/defaultdb> use test;
+SET
+
+Time: 13ms total (execution 13ms / network 0ms)
+
+
+root@:26257/test> CREATE TABLE test (
+Region VARCHAR(50),
+Country VARCHAR(50),
+ItemType VARCHAR(50),
+SalesChannel VARCHAR(20),
+OrderPriority VARCHAR(10),
+OrderDate VARCHAR(10),
+OrderID int,
+ShipDate VARCHAR(10),
+UnitsSold int,
+UnitPrice decimal(12,2),
+UnitCost decimal(12,2),
+TotalRevenue decimal(12,2),
+TotalCost decimal(12,2),
+TotalProfit decimal(12,2)
+);
+CREATE TABLE
+
+Time: 34ms total (execution 34ms / network 0ms)
+
+root@:26257/test> IMPORT INTO test (Region,Country,ItemType,SalesChannel,OrderPriority,OrderDate,OrderID,ShipDate,UnitsSold,UnitPrice,UnitCost,TotalRev
+enue,TotalCost,TotalProfit) CSV DATA ('https://storage.googleapis.com/postgres13/1000000SalesRecords.csv?AUTH=implicit') WITH DELIMITER = ',', SKIP = '
+1';
+        job_id       |  status   | fraction_completed |  rows   | index_entries |   bytes
+---------------------+-----------+--------------------+---------+---------------+------------
+  774283881131671553 | succeeded |                  1 | 1000000 |             0 | 134108488
+(1 row)
+
+Time: 22.125s total (execution 22.125s / network 0.000s)
+
+root@:26257/test> SELECT count(*) FROM test WHERE unitssold=124;
+  count
+---------
+    108
+(1 row)
+
+Time: 656ms total (execution 656ms / network 0ms)
+
