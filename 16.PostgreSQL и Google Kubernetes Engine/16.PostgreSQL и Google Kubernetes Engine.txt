@@ -1,0 +1,489 @@
+
+#--Создал кластер в ЯО
+house@Igor:~$ kubectl get all
+NAME                 TYPE        CLUSTER-IP    EXTERNAL-IP   PORT(S)   AGE
+service/kubernetes   ClusterIP   10.96.128.1   <none>        443/TCP   23h
+house@Igor:~$ kubectl get storageclasses
+NAME                           PROVISIONER                     RECLAIMPOLICY   VOLUMEBINDINGMODE      ALLOWVOLUMEEXPANSION   AGE
+yc-network-hdd (default)       disk-csi-driver.mks.ycloud.io   Delete          WaitForFirstConsumer   true                   23h
+yc-network-nvme                disk-csi-driver.mks.ycloud.io   Delete          WaitForFirstConsumer   true                   23h
+yc-network-ssd                 disk-csi-driver.mks.ycloud.io   Delete          WaitForFirstConsumer   true                   23h
+yc-network-ssd-nonreplicated   disk-csi-driver.mks.ycloud.io   Delete          WaitForFirstConsumer   true                   23h
+
+house@Igor:/mnt/c$ cd Users/house/pgGKE/
+
+house@Igor:/mnt/c/Users/house/pgGKE$ ls
+Alexey10.1pg12  citus_10.1pg12  citus_93_ip  postgres-configmap.yaml   postgres-service.yaml   postgres-storage.yaml
+citus           citus_80        citus_LB     postgres-deployment.yaml  postgres-service2.yaml  pvc-demo.yaml
+
+#-- создадим заявку на 1Gb
+house@Igor:/mnt/c/Users/house/pgGKE$ nano pvc-demo.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-demo
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+house@Igor:/mnt/c/Users/house/pgGKE$ kubectl apply -f pvc-demo.yaml
+persistentvolumeclaim/pvc-demo created
+
+house@Igor:/mnt/c/Users/house/pgGKE$ kubectl get pvc -o wide
+NAME       STATUS    VOLUME   CAPACITY   ACCESS MODES   STORAGECLASS     AGE   VOLUMEMODE
+pvc-demo   Pending                                      yc-network-hdd   32s   Filesystem
+
+house@Igor:/mnt/c/Users/house/pgGKE$ kubectl get pv -o wide
+No resources found
+
+>>Размер не показывает Status Pending
+
+#-- зашел на клиент кубика Lens, Status Pending "storage":"1Gi"
+Created
+5m 29s ago (2022-07-01T00:19:24+03:00)
+Name
+pvc-demo
+Namespace
+default
+Annotations
+kubectl.kubernetes.io/last-applied-configuration={"apiVersion":"v1","kind":"PersistentVolumeClaim","metadata":{"annotations":{},"name":"pvc-demo","namespace":"default"},"spec":{"accessModes":["ReadWriteOnce"],"resources":{"requests":{"storage":"1Gi"}}}}
+Finalizers
+kubernetes.io/pvc-protection
+Access Modes
+ReadWriteOnce
+Storage Class Name
+yc-network-hdd
+Storage
+1Gi
+Pods
+Status
+Pending
+
+Удалил
+house@Igor:/mnt/c/Users/house/pgGKE$ kubectl delete pvc pvc-demo
+persistentvolumeclaim "pvc-demo" deleted
+
+Создал через create
+house@Igor:/mnt/c/Users/house/pgGKE$ kubectl create -f pvc-demo.yaml
+persistentvolumeclaim/pvc-demo created
+
+#-- Безуспешно
+
+house@Igor:/mnt/c/Users/house/pgGKE$ kubectl get pvc -o wide
+NAME       STATUS    VOLUME   CAPACITY   ACCESS MODES   STORAGECLASS     AGE     VOLUMEMODE
+pvc-demo   Pending                                      yc-network-hdd   2m30s   Filesystem
+
+house@Igor:/mnt/c/Users/house/pgGKE$ kubectl get pv -o wide
+No resources found
+
+#-- Удалил
+house@Igor:/mnt/c/Users/house/pgGKE$ kubectl delete -f pvc-demo.yaml
+persistentvolumeclaim "pvc-demo" deleted
+
+
+#--  UPD В итоге собрал, но что то очень долго собирал....
+house@Igor:~$ kubectl get pvc -o wide
+NAME                STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS     AGE   VOLUMEMODE
+postgres-pv-claim   Bound    pvc-6761a2f0-9d2b-4c9e-be51-2530012e1da6   10Gi       RWO            yc-network-hdd   21m   Filesystem
+
+
+-----------------------------------------
+
+#-- Оставил диск на 10гб 
+
+house@Igor:/mnt/c/Users/house/pgGKE$ kubectl apply -f postgres-configmap.yaml -f postgres-storage.yaml -f postgres-deployment.yaml -f postgres-service.yaml
+configmap/postgres-config created
+persistentvolumeclaim/postgres-pv-claim created
+deployment.apps/postgres created
+service/postgres created
+
+#-- проверил 
+house@Igor:/mnt/c/Users/house/pgGKE$ kubectl get all
+NAME                            READY   STATUS    RESTARTS   AGE
+pod/postgres-6c7f9fc89c-bnrwd   1/1     Running   0          48s
+
+NAME                 TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE
+service/kubernetes   ClusterIP   10.96.128.1     <none>        443/TCP          25h
+service/postgres     NodePort    10.96.149.162   <none>        5432:31013/TCP   48s
+
+NAME                       READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/postgres   1/1     1            1           48s
+
+NAME                                  DESIRED   CURRENT   READY   AGE
+replicaset.apps/postgres-6c7f9fc89c   1         1         1       48s
+
+
+
+house@Igor:/mnt/c/Users/house/pgGKE$ kubectl exec -it pod/postgres-6c7f9fc89c-bnrwd bash
+kubectl exec [POD] [COMMAND] is DEPRECATED and will be removed in a future version. Use kubectl exec [POD] -- [COMMAND] instead.
+root@postgres-6c7f9fc89c-bnrwd:/#
+
+house@Igor:/mnt/c/Users/house/pgGKE$ kubectl exec -it pod/postgres-6c7f9fc89c-bnrwd bash
+kubectl exec [POD] [COMMAND] is DEPRECATED and will be removed in a future version. Use kubectl exec [POD] -- [COMMAND] instead.
+
+root@postgres-6c7f9fc89c-bnrwd:/# df
+Filesystem     1K-blocks     Used Available Use% Mounted on
+overlay         66012696 10324580  52964708  17% /
+tmpfs              65536        0     65536   0% /dev
+tmpfs            2013020        0   2013020   0% /sys/fs/cgroup
+/dev/vda2       66012696 10324580  52964708  17% /etc/hosts
+shm                65536       28     65508   1% /dev/shm
+/dev/vdb        10255636    36892  10202360   1% /var/lib/postgresql
+tmpfs            2013020       12   2013008   1% /run/secrets/kubernetes.io/serviceaccount
+tmpfs            2013020        0   2013020   0% /proc/acpi
+tmpfs            2013020        0   2013020   0% /proc/scsi
+tmpfs            2013020        0   2013020   0% /sys/firmware
+
+
+
+root@postgres-6c7f9fc89c-bnrwd:/# psql -U postgresadmin -d postgresdb
+psql (14.4 (Debian 14.4-1.pgdg110+1))
+Type "help" for help.
+
+postgresdb=# CREATE DATABASE raxi;
+
+
+#-- Пробросил порт
+house@Igor:/mnt/c/Users/house/pgGKE$ kubectl port-forward pod/postgres-6c7f9fc89c-bnrwd 5432:5432
+Forwarding from 127.0.0.1:5432 -> 5432
+Forwarding from [::1]:5432 -> 5432
+
+#-- В соседнем окне подключился
+house@Igor:~$ psql -U postgresadmin -d postgresdb -h localhost
+psql (12.11 (Ubuntu 12.11-0ubuntu0.20.04.1), server 14.4 (Debian 14.4-1.pgdg110+1))
+WARNING: psql major version 12, server major version 14.
+         Some psql features might not work.
+Type "help" for help.
+
+postgresdb=# \l
+                                         List of databases
+    Name    |     Owner     | Encoding |  Collate   |   Ctype    |        Access privileges
+------------+---------------+----------+------------+------------+---------------------------------
+ postgres   | postgresadmin | UTF8     | en_US.utf8 | en_US.utf8 |
+ postgresdb | postgresadmin | UTF8     | en_US.utf8 | en_US.utf8 |
+ raxi       | postgresadmin | UTF8     | en_US.utf8 | en_US.utf8 |
+ template0  | postgresadmin | UTF8     | en_US.utf8 | en_US.utf8 | =c/postgresadmin               +
+            |               |          |            |            | postgresadmin=CTc/postgresadmin
+ template1  | postgresadmin | UTF8     | en_US.utf8 | en_US.utf8 | =c/postgresadmin               +
+            |               |          |            |            | postgresadmin=CTc/postgresadmin
+(5 rows)
+
+
+>>ошибку допустил raxi вместо taxi
+
+#-- Проверил ноды
+house@Igor:~$ kubectl get nodes -o wide
+NAME                        STATUS   ROLES    AGE   VERSION    INTERNAL-IP   EXTERNAL-IP     OS-IMAGE             KERNEL-VERSION      CON               TAINER-RUNTIME
+cl1kghtjdu7eec4tq8h1-ebyj   Ready    <none>   25h   v1.20.11   10.129.0.29   51.250.19.104   Ubuntu 20.04.4 LTS   5.4.0-100-generic   doc               ker://20.10.12
+cl1kghtjdu7eec4tq8h1-ejot   Ready    <none>   25h   v1.20.11   10.129.0.30   84.252.139.29   Ubuntu 20.04.4 LTS   5.4.0-100-generic   doc               ker://20.10.12
+cl1kghtjdu7eec4tq8h1-upaw   Ready    <none>   25h   v1.20.11   10.129.0.5    84.252.138.56   Ubuntu 20.04.4 LTS   5.4.0-100-generic   doc               ker://20.10.12
+
+#--Проверил под
+house@Igor:~$ kubectl get pods -o wide
+NAME                        READY   STATUS    RESTARTS   AGE   IP             NODE                        NOMINATED NODE   READINESS GATES
+postgres-6c7f9fc89c-bnrwd   1/1     Running   0          17m   10.112.129.4   cl1kghtjdu7eec4tq8h1-ebyj   <none>           <none>
+
+
+
+Chouse@Igor:/mnt/c/Users/house/pgGKE$ kubectl apply -f postgres-service2.yaml
+service/postgres configured
+
+
+#-- IP получил мгновенно
+house@Igor:/mnt/c/Users/house/pgGKE$ kubectl get all
+NAME                            READY   STATUS    RESTARTS   AGE
+pod/postgres-6c7f9fc89c-bnrwd   1/1     Running   0          24m
+
+NAME                 TYPE           CLUSTER-IP      EXTERNAL-IP      PORT(S)          AGE
+service/kubernetes   ClusterIP      10.96.128.1     <none>           443/TCP          25h
+service/postgres     LoadBalancer   10.96.149.162   84.201.155.183   5432:31013/TCP   24m
+
+NAME                       READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/postgres   1/1     1            1           24m
+
+NAME                                  DESIRED   CURRENT   READY   AGE
+replicaset.apps/postgres-6c7f9fc89c   1         1         1       24m
+
+
+#-- Подключился из вне
+house@Igor:/mnt/c/Users/house/pgGKE$ psql -h 84.201.155.183 -U postgresadmin --password -p 5432 postgresdb
+Password:
+psql (12.11 (Ubuntu 12.11-0ubuntu0.20.04.1), server 14.4 (Debian 14.4-1.pgdg110+1))
+WARNING: psql major version 12, server major version 14.
+         Some psql features might not work.
+Type "help" for help.
+
+postgresdb-# \l
+                                         List of databases
+    Name    |     Owner     | Encoding |  Collate   |   Ctype    |        Access privileges
+------------+---------------+----------+------------+------------+---------------------------------
+ postgres   | postgresadmin | UTF8     | en_US.utf8 | en_US.utf8 |
+ postgresdb | postgresadmin | UTF8     | en_US.utf8 | en_US.utf8 |
+ raxi       | postgresadmin | UTF8     | en_US.utf8 | en_US.utf8 |
+ template0  | postgresadmin | UTF8     | en_US.utf8 | en_US.utf8 | =c/postgresadmin               +
+            |               |          |            |            | postgresadmin=CTc/postgresadmin
+ template1  | postgresadmin | UTF8     | en_US.utf8 | en_US.utf8 | =c/postgresadmin               +
+            |               |          |            |            | postgresadmin=CTc/postgresadmin
+(5 rows)
+
+
+house@Igor:/mnt/c/Users/house/pgGKE$ kubectl delete all,ing,secrets,pvc,pv --all
+pod "postgres-6c7f9fc89c-bnrwd" deleted
+service "kubernetes" deleted
+service "postgres" deleted
+deployment.apps "postgres" deleted
+replicaset.apps "postgres-6c7f9fc89c" deleted
+secret "default-token-jwggc" deleted
+persistentvolumeclaim "postgres-pv-claim" deleted
+persistentvolume "pvc-6761a2f0-9d2b-4c9e-be51-2530012e1da6" deleted
+
+------------------------------------------------------------------------------------------------------
+
+
+#--Создаем secrets
+house@Igor:/mnt/c/Users/house/pgGKE/citus$ kubectl create -f secrets.yaml
+secret/citus-secrets created
+
+#--Создаем master
+house@Igor:/mnt/c/Users/house/pgGKE/citus$ kubectl create -f master.yaml
+persistentvolumeclaim/citus-master-pvc created
+service/citus-master created
+deployment.apps/citus-master created
+
+#--Проверяем
+house@Igor:/mnt/c/Users/house/pgGKE/citus$ kubectl get all
+NAME                                READY   STATUS    RESTARTS   AGE
+pod/citus-master-7b86795598-97scq   1/1     Running   0          62s
+
+NAME                   TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE
+service/citus-master   NodePort    10.96.159.114   <none>        5432:31713/TCP   63s
+service/kubernetes     ClusterIP   10.96.128.1     <none>        443/TCP          6m10s
+
+NAME                           READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/citus-master   1/1     1            1           62s
+
+NAME                                      DESIRED   CURRENT   READY   AGE
+replicaset.apps/citus-master-7b86795598   1         1         1       62s
+
+#--Создаем
+house@Igor:/mnt/c/Users/house/pgGKE/citus$ kubectl create -f workers.yaml
+service/citus-workers created
+statefulset.apps/citus-worker created
+
+#-- Проверяем создались ноды
+house@Igor:/mnt/c/Users/house/pgGKE/citus$ kubectl get all
+NAME                                READY   STATUS    RESTARTS   AGE
+pod/citus-master-7b86795598-97scq   1/1     Running   0          4m44s
+pod/citus-worker-0                  1/1     Running   0          2m13s
+pod/citus-worker-1                  1/1     Running   0          103s
+pod/citus-worker-2                  1/1     Running   0          84s
+
+NAME                    TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE
+service/citus-master    NodePort    10.96.159.114   <none>        5432:31713/TCP   4m45s
+service/citus-workers   ClusterIP   None            <none>        5432/TCP         2m14s
+service/kubernetes      ClusterIP   10.96.128.1     <none>        443/TCP          9m52s
+
+NAME                           READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/citus-master   1/1     1            1           4m44s
+
+NAME                                      DESIRED   CURRENT   READY   AGE
+replicaset.apps/citus-master-7b86795598   1         1         1       4m44s
+
+NAME                            READY   AGE
+statefulset.apps/citus-worker   3/3     2m14s
+
+#--Подключаемся
+house@Igor:/mnt/c/Users/house/pgGKE/citus$ kubectl exec -it pod/citus-master-7b86795598-97scq -- bash
+root@citus-master-7b86795598-97scq:/# psql -U postgres
+psql (10.3 (Debian 10.3-1.pgdg90+1))
+Type "help" for help.
+
+postgres=# SELECT * FROM master_get_active_worker_nodes();
+          node_name           | node_port
+------------------------------+-----------
+ citus-worker-2.citus-workers |      5432
+ citus-worker-0.citus-workers |      5432
+ citus-worker-1.citus-workers |      5432
+(3 rows)
+
+>> Ноды в порядке
+
+
+#--Установил gsutil скачаем 10Гб чикагского такси
+
+kubectl exec -it pod/citus-master-7b86795598-97scq -- bash
+
+root@citus-master-7b86795598-97scq:/home/1# chmod 777 /home/1
+
+
+root@citus-master-7b86795598-97scq:/home/1# gsutil -m cp -R gs://chicago10/taxi.csv.0000000000[0-3]* .
+Copying gs://chicago10/taxi.csv.000000000006...
+Copying gs://chicago10/taxi.csv.000000000001...
+Copying gs://chicago10/taxi.csv.000000000005...
+Copying gs://chicago10/taxi.csv.000000000000...
+Copying gs://chicago10/taxi.csv.000000000002...
+Copying gs://chicago10/taxi.csv.000000000007...
+Copying gs://chicago10/taxi.csv.000000000008...
+Copying gs://chicago10/taxi.csv.000000000009...
+Copying gs://chicago10/taxi.csv.000000000004...
+Copying gs://chicago10/taxi.csv.000000000003...
+Copying gs://chicago10/taxi.csv.000000000010...
+Copying gs://chicago10/taxi.csv.000000000011...
+Copying gs://chicago10/taxi.csv.000000000012...
+Copying gs://chicago10/taxi.csv.000000000013...
+Copying gs://chicago10/taxi.csv.000000000014...97.6 MiB/s ETA 00:01:23
+Copying gs://chicago10/taxi.csv.000000000015...92.5 MiB/s ETA 00:01:24
+Copying gs://chicago10/taxi.csv.000000000016...92.6 MiB/s ETA 00:01:24
+Copying gs://chicago10/taxi.csv.000000000017...99.6 MiB/s ETA 00:01:16
+Copying gs://chicago10/taxi.csv.000000000018...00.6 MiB/s ETA 00:01:14
+Copying gs://chicago10/taxi.csv.000000000019...100.4 MiB/s ETA 00:01:12
+Copying gs://chicago10/taxi.csv.000000000020... 94.6 MiB/s ETA 00:01:10
+Copying gs://chicago10/taxi.csv.000000000021... 95.2 MiB/s ETA 00:01:09
+Copying gs://chicago10/taxi.csv.000000000022... 90.6 MiB/s ETA 00:01:12
+Copying gs://chicago10/taxi.csv.000000000023...100.4 MiB/s ETA 00:01:02
+Copying gs://chicago10/taxi.csv.000000000024...107.1 MiB/s ETA 00:00:57
+Copying gs://chicago10/taxi.csv.000000000025...128.8 MiB/s ETA 00:00:42
+Copying gs://chicago10/taxi.csv.000000000026...115.1 MiB/s ETA 00:00:45
+Copying gs://chicago10/taxi.csv.000000000027...122.4 MiB/s ETA 00:00:38
+Copying gs://chicago10/taxi.csv.000000000028...
+Copying gs://chicago10/taxi.csv.000000000029...128.1 MiB/s ETA 00:00:36
+Copying gs://chicago10/taxi.csv.000000000030...102.0 MiB/s ETA 00:00:41
+Copying gs://chicago10/taxi.csv.000000000031...105.3 MiB/s ETA 00:00:39
+Copying gs://chicago10/taxi.csv.000000000032... 93.8 MiB/s ETA 00:00:42
+Copying gs://chicago10/taxi.csv.000000000033...102.4 MiB/s ETA 00:00:34
+Copying gs://chicago10/taxi.csv.000000000034...113.0 MiB/s ETA 00:00:27
+Copying gs://chicago10/taxi.csv.000000000035...100.8 MiB/s ETA 00:00:30
+Copying gs://chicago10/taxi.csv.000000000036...113.2 MiB/s ETA 00:00:24
+Copying gs://chicago10/taxi.csv.000000000037... 98.9 MiB/s ETA 00:00:27
+Copying gs://chicago10/taxi.csv.000000000038...134.8 MiB/s ETA 00:00:15
+Copying gs://chicago10/taxi.csv.000000000039...119.6 MiB/s ETA 00:00:17
+| [40/40 files][ 10.0 GiB/ 10.0 GiB] 100% Done  74.4 MiB/s ETA 00:00:00
+Operation completed over 40 objects/10.0 GiB.
+
+#--Создал таблицу taxi_trips и test
+postgres=# create database test;
+NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
+DETAIL:  Citus does not propagate CREATE DATABASE command to workers
+HINT:  You can manually create a database and its extensions on workers.
+CREATE DATABASE
+postgres=# \l
+                                 List of databases
+   Name    |  Owner   | Encoding |  Collate   |   Ctype    |   Access privileges
+-----------+----------+----------+------------+------------+-----------------------
+ postgres  | postgres | UTF8     | en_US.utf8 | en_US.utf8 |
+ template0 | postgres | UTF8     | en_US.utf8 | en_US.utf8 | =c/postgres          +
+           |          |          |            |            | postgres=CTc/postgres
+ template1 | postgres | UTF8     | en_US.utf8 | en_US.utf8 | =c/postgres          +
+           |          |          |            |            | postgres=CTc/postgres
+ test      | postgres | UTF8     | en_US.utf8 | en_US.utf8 |
+(4 rows)
+
+postgres=#  \dt+
+                         List of relations
+ Schema |    Name    | Type  |  Owner   |    Size    | Description
+--------+------------+-------+----------+------------+-------------
+ public | taxi_trips | table | postgres | 8192 bytes |
+ public | test       | table | postgres | 0 bytes    |
+(2 rows)
+
+
+#--Скопировал - что то не так - COPY 0
+postgres=# COPY taxi_trips(unique_key,
+postgres(# taxi_id,
+postgres(# trip_start_timestamp,
+postgres(# trip_end_timestamp,
+postgres(# trip_seconds,
+postgres(# trip_miles,
+postgres(# pickup_census_tract,
+postgres(# dropoff_census_tract,
+postgres(# pickup_community_area,
+postgres(# dropoff_community_area,
+postgres(# fare,
+postgres(# tips,
+postgres(# tolls,
+postgres(# extras,
+postgres(# trip_total,
+postgres(# payment_type,
+postgres(# company,
+postgres(# pickup_latitude,
+postgres(# pickup_longitude,
+postgres(# pickup_location,
+postgres(# dropoff_latitude,
+postgres(# dropoff_longitude,
+postgres(# dropoff_location)
+postgres-# FROM PROGRAM 'awk FNR-1 /home/1/*.csv | cat' DELIMITER ',' CSV HEADER;
+COPY 0
+
+#--Убрал csv формат ,выставил  'FNR-1 /home/1/*.*' - Успех
+postgres=# COPY taxi_trips(unique_key,
+taxi_id,
+trip_start_timestamp,
+trip_end_timestamp,
+trip_seconds,
+trip_miles,
+pickup_census_tract,
+dropoff_census_tract,
+pickup_community_area,
+dropoff_community_area,
+fare,
+tips,
+tolls,
+extras,
+trip_total,
+payment_type,
+company,
+pickup_latitude,
+pickup_longitude,
+pickup_location,
+dropoff_latitude,
+dropoff_longitude,
+dropoff_location)
+FROM PROGRAM 'awk FNR-1 /home/1/*.* | cat' DELIMITER ',' CSV HEADER;
+COPY 26753682
+
+>>Копировалось минут 10
+
+#--Куда скопировалось - непонятно
+postgres=# \dt+
+                         List of relations
+ Schema |    Name    | Type  |  Owner   |    Size    | Description
+--------+------------+-------+----------+------------+-------------
+ public | taxi_trips | table | postgres | 8192 bytes |
+ public | test       | table | postgres | 0 bytes    |
+(2 rows)
+
+
+#--Запрос выполнялся около 2 мин, тайминг включить забыл
+postgres=# select count(*) from taxi_trips;
+  count
+----------
+ 26753682
+(1 row)
+
+#--Включил тайминг
+postgres=# timing on
+
+
+
+#--запрос для оценки скорости 00:46
+postgres=# SELECT payment_type, round(sum(tips)/sum(trip_total)*100, 0) + 0 as tips_percent, count(*) as c FROM taxi_trips group by payment_type order by 3;
+ payment_type | tips_percent |    c
+--------------+--------------+----------
+ Prepaid      |            0 |        6
+ Way2ride     |           12 |       27
+ Split        |           17 |      180
+ Dispute      |            0 |     5596
+ Pcard        |            2 |    13575
+ No Charge    |            0 |    26294
+ Mobile       |           16 |    61256
+ Prcard       |            1 |    86053
+ Unknown      |            0 |   103869
+ Credit Card  |           17 |  9224956
+ Cash         |            0 | 17231870
+(11 rows)
+
+Time: 46165.566 ms (00:46.166)
+
