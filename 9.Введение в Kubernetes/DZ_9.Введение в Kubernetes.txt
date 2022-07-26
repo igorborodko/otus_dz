@@ -51,12 +51,5 @@ error: unable to listen on any of the requested ports: [{5432 5432}]
 Пароль passwd
 URL	jdbc:postgresql://localhost:5432/myapp
 
-#С ошибкой не разобрался...
-postgres\app>docker build -t pg_kub2_postgres:v1 .
 
-kubectl apply -f secrets.yaml -f app-config.yaml -f deployment.yaml -f service.yaml
 
-minikube service pg-service --url -n pg-kub2
-
-http://127.0.0.1:59529/db
-Почему ошибка?
