@@ -1,0 +1,92 @@
+
+#Проверил сеть
+house@Igor:~$ yc vpc subnet list
++----------------------+-----------------------+----------------------+----------------+---------------+-----------------+
+|          ID          |         NAME          |      NETWORK ID      | ROUTE TABLE ID |     ZONE      |      RANGE      |
++----------------------+-----------------------+----------------------+----------------+---------------+-----------------+
+| b0cbpood00g4e8on2plb | default-ru-central1-c | enp8v0up3r7dla07bojq |                | ru-central1-c | [10.130.0.0/24] |
+| e2lb1139qrjenkhvhclt | default-ru-central1-b | enp8v0up3r7dla07bojq |                | ru-central1-b | [10.129.0.0/24] |
+| e9bokbun6kthdim3bms0 | default-ru-central1-a | enp8v0up3r7dla07bojq |                | ru-central1-a | [10.128.0.0/24] |
++----------------------+-----------------------+----------------------+----------------+---------------+-----------------+
+
+#Создал кластер
+yc managed-postgresql cluster create \
+   --name otus-db-pg-msp-1 \
+   --environment production \
+   --network-name default \
+   --host zone-id=ru-central1-a,subnet-id=e9bokbun6kthdim3bms0,assign-public-ip \
+   --host zone-id=ru-central1-b,subnet-id=e2lb1139qrjenkhvhclt,assign-public-ip \
+   --resource-preset b2.medium \
+   --user name=otus,password=pasS@12345 \
+   --database name=otus_db,owner=otus \
+   --disk-size 20 \
+   --disk-type  network-ssd \
+   --datalens-access \
+   --websql-access \
+   --serverless-access \
+   --postgresql-version 14
+   
+
+house@Igor:~$ yc managed-postgresql cluster list
++----------------------+------------------+---------------------+--------+---------+
+|          ID          |       NAME       |     CREATED AT      | HEALTH | STATUS  |
++----------------------+------------------+---------------------+--------+---------+
+| c9qnvl47lqbng36g6vgb | otus-db-pg-msp-1 | 2022-07-30 18:00:46 | ALIVE  | RUNNING |
++----------------------+------------------+---------------------+--------+---------+
+
+
+house@Igor:~$ yc managed-postgresql host list --cluster-name otus-db-pg-msp-1
++-------------------------------------------+----------------------+---------+--------+---------------+-----------+--------------------+
+|                   NAME                    |      CLUSTER ID      |  ROLE   | HEALTH |    ZONE ID    | PUBLIC IP | REPLICATION SOURCE |
++-------------------------------------------+----------------------+---------+--------+---------------+-----------+--------------------+
+| rc1a-4m5dzlq1r96tjm2a.mdb.yandexcloud.net | c9qnvl47lqbng36g6vgb | MASTER  | ALIVE  | ru-central1-a | true      |                    |
+| rc1b-rg291030gthhdzgk.mdb.yandexcloud.net | c9qnvl47lqbng36g6vgb | REPLICA | ALIVE  | ru-central1-b | true      |                    |
++-------------------------------------------+----------------------+---------+--------+---------------+-----------+--------------------+
+
+house@Igor:~$ yc managed-postgresql host list --cluster-name otus-db-pg-msp-1
++-------------------------------------------+----------------------+---------+--------+---------------+-----------+--------------------+
+|                   NAME                    |      CLUSTER ID      |  ROLE   | HEALTH |    ZONE ID    | PUBLIC IP | REPLICATION SOURCE |
++-------------------------------------------+----------------------+---------+--------+---------------+-----------+--------------------+
+| rc1a-y0quriik8y5g8wh6.mdb.yandexcloud.net | c9qaaego3ookk5sendg3 | MASTER  | ALIVE  | ru-central1-a | true      |                    |
+| rc1b-scs1uomr1tl8vjdd.mdb.yandexcloud.net | c9qaaego3ookk5sendg3 | REPLICA | ALIVE  | ru-central1-b | true      |                    |
++-------------------------------------------+----------------------+---------+--------+---------------+-----------+--------------------+
+
+
+#Подключамся
+
+
+house@Igor:~$ psql "host=rc1a-y0quriik8y5g8wh6.mdb.yandexcloud.net,rc1b-scs1uomr1tl8vjdd.mdb.yandexcloud.net \
+>       port=6432 \
+>       sslmode=verify-full \
+>       sslrootcert=ya_ca.crt \
+>       dbname=otus_db \
+>       user=otus \
+>       password=pasS@12345 \
+>       target_session_attrs=read-write"
+psql (12.11 (Ubuntu 12.11-0ubuntu0.20.04.1), server 14.4 (Ubuntu 14.4-201-yandex.52448.a37cfc9be3))
+WARNING: psql major version 12, server major version 14.
+         Some psql features might not work.
+SSL connection (protocol: TLSv1.3, cipher: TLS_AES_256_GCM_SHA384, bits: 256, compression: off)
+Type "help" for help.
+
+otus_db=>
+
+
+#Проверяем репликаслоты
+otus_db=> SELECT * FROM pg_replication_slots \gx
+-[ RECORD 1 ]-------+------------------------------------------
+slot_name           | rc1b_scs1uomr1tl8vjdd_mdb_yandexcloud_net
+plugin              |
+slot_type           | physical
+datoid              |
+database            |
+temporary           | f
+active              | t
+active_pid          | 7404
+xmin                | 1515
+catalog_xmin        |
+restart_lsn         | 0/1A0016B0
+confirmed_flush_lsn |
+wal_status          | reserved
+safe_wal_size       |
+two_phase           | f
