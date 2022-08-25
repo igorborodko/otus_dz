@@ -1,0 +1,202 @@
+
+
+
+house@pgsql1:~$ sudo -u postgres patroni /etc/patroni.yml
+2022-08-25 21:08:56,195 INFO: Selected new etcd server http://etcd3.ru-central1.internal:2379
+2022-08-25 21:08:56,200 INFO: No PostgreSQL configuration items changed, nothing to reload.
+2022-08-25 21:08:56,208 WARNING: Postgresql is not running.
+2022-08-25 21:08:56,208 INFO: Lock owner: None; I am pgsql1
+2022-08-25 21:08:56,209 INFO: pg_controldata:
+  pg_control version number: 1300
+  Catalog version number: 202107181
+  Database system identifier: 7135922292955924720
+  Database cluster state: shut down
+  pg_control last modified: Thu Aug 25 21:03:00 2022
+  Latest checkpoint location: 0/194E510
+  Latest checkpoint's REDO location: 0/194E510
+  Latest checkpoint's REDO WAL file: 000000010000000000000001
+  Latest checkpoint's TimeLineID: 1
+  Latest checkpoint's PrevTimeLineID: 1
+  Latest checkpoint's full_page_writes: on
+  Latest checkpoint's NextXID: 0:734
+  Latest checkpoint's NextOID: 13762
+  Latest checkpoint's NextMultiXactId: 1
+  Latest checkpoint's NextMultiOffset: 0
+  Latest checkpoint's oldestXID: 727
+  Latest checkpoint's oldestXID's DB: 1
+  Latest checkpoint's oldestActiveXID: 0
+  Latest checkpoint's oldestMultiXid: 1
+  Latest checkpoint's oldestMulti's DB: 1
+  Latest checkpoint's oldestCommitTsXid: 0
+  Latest checkpoint's newestCommitTsXid: 0
+  Time of latest checkpoint: Thu Aug 25 21:03:00 2022
+  Fake LSN counter for unlogged rels: 0/3E8
+  Minimum recovery ending location: 0/0
+  Min recovery ending loc's timeline: 0
+  Backup start location: 0/0
+  Backup end location: 0/0
+  End-of-backup record required: no
+  wal_level setting: replica
+  wal_log_hints setting: off
+  max_connections setting: 100
+  max_worker_processes setting: 8
+  max_wal_senders setting: 10
+  max_prepared_xacts setting: 0
+  max_locks_per_xact setting: 64
+  track_commit_timestamp setting: off
+  Maximum data alignment: 8
+  Database block size: 8192
+  Blocks per segment of large relation: 131072
+  WAL block size: 8192
+  Bytes per WAL segment: 16777216
+  Maximum length of identifiers: 64
+  Maximum columns in an index: 32
+  Maximum size of a TOAST chunk: 1996
+  Size of a large-object chunk: 2048
+  Date/time type storage: 64-bit integers
+  Float8 argument passing: by value
+  Data page checksum version: 1
+  Mock authentication nonce: ce3d50eef4b1d46de26f96fe111107610918143c251cdfd2a288d6226ecaaa50
+
+2022-08-25 21:08:56,215 INFO: Lock owner: None; I am pgsql1
+2022-08-25 21:08:56,217 INFO: starting as a secondary
+2022-08-25 21:08:56,343 INFO: postmaster pid=6433
+localhost:5432 - no response
+2022-08-25 21:08:56.351 UTC [6433] LOG:  starting PostgreSQL 14.5 (Ubuntu 14.5-1.pgdg22.04+1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.2.0-19ubuntu1) 11.2.0, 64-bit
+2022-08-25 21:08:56.351 UTC [6433] LOG:  listening on IPv4 address "127.0.0.1", port 5432
+2022-08-25 21:08:56.354 UTC [6433] LOG:  listening on IPv4 address "10.129.0.30", port 5432
+2022-08-25 21:08:56.356 UTC [6433] LOG:  listening on Unix socket "./.s.PGSQL.5432"
+2022-08-25 21:08:56.362 UTC [6435] LOG:  database system was shut down at 2022-08-25 21:03:00 UTC
+2022-08-25 21:08:56.362 UTC [6435] WARNING:  specified neither primary_conninfo nor restore_command
+2022-08-25 21:08:56.362 UTC [6435] HINT:  The database server will regularly poll the pg_wal subdirectory to check for files placed there.
+2022-08-25 21:08:56.362 UTC [6435] LOG:  entering standby mode
+2022-08-25 21:08:56.364 UTC [6435] LOG:  consistent recovery state reached at 0/194E588
+2022-08-25 21:08:56.364 UTC [6435] LOG:  invalid record length at 0/194E588: wanted 24, got 0
+2022-08-25 21:08:56.365 UTC [6433] LOG:  database system is ready to accept read-only connections
+localhost:5432 - accepting connections
+localhost:5432 - accepting connections
+2022-08-25 21:08:57,376 INFO: establishing a new patroni connection to the postgres cluster
+2022-08-25 21:08:57,384 WARNING: Could not activate Linux watchdog device: "Can't open watchdog device: [Errno 2] No such file or directory: '/dev/watchdog'"
+2022-08-25 21:08:57.386 UTC [6445] FATAL:  role "replicator" does not exist
+2022-08-25 21:08:57,387 ERROR: Can not fetch local timeline and lsn from replication connection
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.10/dist-packages/patroni/postgresql/__init__.py", line 850, in get_replica_timeline
+    with self.get_replication_connection_cursor(**self.config.local_replication_address) as cur:
+  File "/usr/lib/python3.10/contextlib.py", line 135, in __enter__
+    return next(self.gen)
+  File "/usr/local/lib/python3.10/dist-packages/patroni/postgresql/__init__.py", line 845, in get_replication_connection_cursor
+    with get_connection_cursor(**conn_kwargs) as cur:
+  File "/usr/lib/python3.10/contextlib.py", line 135, in __enter__
+    return next(self.gen)
+  File "/usr/local/lib/python3.10/dist-packages/patroni/postgresql/connection.py", line 44, in get_connection_cursor
+    conn = psycopg.connect(**kwargs)
+  File "/usr/local/lib/python3.10/dist-packages/psycopg2/__init__.py", line 122, in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+psycopg2.OperationalError: connection to server at "localhost" (::1), port 5432 failed: Connection refused
+        Is the server running on that host and accepting TCP/IP connections?
+connection to server at "localhost" (127.0.0.1), port 5432 failed: FATAL:  role "replicator" does not exist
+
+2022-08-25 21:08:57,392 INFO: promoted self to leader by acquiring session lock
+2022-08-25 21:08:57.393 UTC [6435] LOG:  received promote request
+2022-08-25 21:08:57.393 UTC [6435] LOG:  redo is not required
+server promoting
+2022-08-25 21:08:57,394 INFO: cleared rewind state after becoming the leader
+2022-08-25 21:08:57.398 UTC [6435] LOG:  selected new timeline ID: 2
+2022-08-25 21:08:58.401 UTC [6435] LOG:  archive recovery complete
+2022-08-25 21:08:58.429 UTC [6433] LOG:  database system is ready to accept connections
+2022-08-25 21:08:59,417 INFO: no action. I am (pgsql1), the leader with the lock
+2022-08-25 21:09:09,409 INFO: no action. I am (pgsql1), the leader with the lock
+2022-08-25 21:09:19,411 INFO: no action. I am (pgsql1), the leader with the lock
+2022-08-25 21:09:29,407 INFO: no action. I am (pgsql1), the leader with the lock
+2022-08-25 21:09:39,408 INFO: no action. I am (pgsql1), the leader with the lock
+2022-08-25 21:09:49,407 INFO: no action. I am (pgsql1), the leader with the lock
+2022-08-25 21:09:59,408 INFO: no action. I am (pgsql1), the leader with the lock
+2022-08-25 21:10:09,407 INFO: no action. I am (pgsql1), the leader with the lock
+2022-08-25 21:10:19,407 INFO: no action. I am (pgsql1), the leader with the lock
+2022-08-25 21:10:29,407 INFO: no action. I am (pgsql1), the leader with the lock
+^C2022-08-25 21:10:37.322 UTC [6433] LOG:  received fast shutdown request
+2022-08-25 21:10:37.325 UTC [6433] LOG:  aborting any active transactions
+2022-08-25 21:10:37.328 UTC [6433] LOG:  background worker "logical replication launcher" (PID 6451) exited with exit code 1
+2022-08-25 21:10:37.328 UTC [6443] FATAL:  terminating connection due to administrator command
+2022-08-25 21:10:37.332 UTC [6436] LOG:  shutting down
+2022-08-25 21:10:37.347 UTC [6433] LOG:  database system is shut down
+
+
+
+
+#---/etc/patroni.yml
+
+
+cat temp2.cfg | sudo tee -a /etc/patroni.yml
+scope: patroni
+name: pgsql1
+restapi:
+  listen: 10.129.0.30:8008
+  connect_address: 10.129.0.30:8008
+etcd:
+  hosts: etcd1.ru-central1.internal:2379,etcd2.ru-central1.internal:2379,etcd3.ru-central1.internal:2379
+bootstrap:
+  dcs:
+    ttl: 30
+    loop_wait: 10
+    retry_timeout: 10
+    maximum_lag_on_failover: 1048576
+    postgresql:
+      use_pg_rewind: true
+      parameters:
+  initdb:
+  - encoding: UTF8
+  - data-checksums
+  pg_hba:
+  - host replication replicator 10.0.0.0/8 md5
+  - host all all 10.0.0.0/8 md5
+  users:
+    admin:
+      password: admin_321
+      options:
+        - createrole
+        - createdb
+postgresql:
+  listen: 127.0.0.1, 10.129.0.30:5432
+  connect_address: 10.129.0.30:5432
+  data_dir: /var/lib/postgresql/14/main
+  bin_dir: /usr/lib/postgresql/14/bin
+  pgpass: /tmp/pgpass0
+  authentication:
+    replication:
+      username: replicator
+      password: rep-pass_321
+    superuser:
+      username: postgres
+      password: zalando_321
+    rewind:
+      username: rewind_user
+      password: rewind_password_321
+  parameters:
+    unix_socket_directories: '.'
+tags:
+    nofailover: false
+    noloadbalance: false
+    clonefrom: false
+    nosync: false
+ 
+ 
+ 
+ 
+ #----/etc/systemd/system/patroni.service
+ 
+ 
+  cat temp.cfg | sudo tee -a /etc/systemd/system/patroni.service
+[Unit]
+Description=High availability PostgreSQL Cluster
+After=syslog.target network.target
+[Service]
+Type=simple
+User=postgres
+Group=postgres
+ExecStart=/usr/local/bin/patroni /etc/patroni.yml
+KillMode=process
+TimeoutSec=30
+Restart=no
+[Install]
+WantedBy=multi-user.target
