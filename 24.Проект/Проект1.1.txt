@@ -1,0 +1,182 @@
+
+Кластеры etcd впорядке
+
+house@etcd1:~$ hostname; ps -aef | grep etcd | grep -v grep
+etcd1
+etcd         643       1  1 20:01 ?        00:00:24 /usr/bin/etcd
+
+#Проверяем здоровье кластеров
+house@etcd1:~$ etcdctl cluster-health
+member 9a1f33941721f94d is healthy: got healthy result from http://etcd1.ru-central1.internal:2379
+member 9df0146dd9068bd2 is healthy: got healthy result from http://etcd3.ru-central1.internal:2379
+member f2aeb69aaf7ffcbf is healthy: got healthy result from http://etcd2.ru-central1.internal:2379
+cluster is healthy
+
+
+#Проверяем пинг с etcd1
+house@etcd1:~$ ping pgsql1
+PING pgsql1.ru-central1.internal (10.129.0.22) 56(84) bytes of data.
+64 bytes from pgsql1.ru-central1.internal (10.129.0.22): icmp_seq=1 ttl=63 time=0.625 ms
+64 bytes from pgsql1.ru-central1.internal (10.129.0.22): icmp_seq=2 ttl=63 time=0.317 ms
+64 bytes from pgsql1.ru-central1.internal (10.129.0.22): icmp_seq=3 ttl=63 time=0.432 ms
+
+#Проверяем пинг с pgsql1
+house@pgsql1:~$ ping etcd1
+PING etcd1.ru-central1.internal (10.129.0.21) 56(84) bytes of data.
+64 bytes from etcd1.ru-central1.internal (10.129.0.21): icmp_seq=1 ttl=63 time=0.922 ms
+64 bytes from etcd1.ru-central1.internal (10.129.0.21): icmp_seq=2 ttl=63 time=0.431 ms
+64 bytes from etcd1.ru-central1.internal (10.129.0.21): icmp_seq=3 ttl=63 time=0.308 ms
+64 bytes from etcd1.ru-central1.internal (10.129.0.21): icmp_seq=4 ttl=63 time=0.285 ms
+
+
+
+#-- ставим питон на 1 ноде 
+house@pgsql1:~$ sudo pip3 install psycopg2-binary
+Collecting psycopg2-binary
+  Downloading psycopg2_binary-2.9.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (3.0 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.0/3.0 MB 11.6 MB/s eta 0:00:00
+Installing collected packages: psycopg2-binary
+Successfully installed psycopg2-binary-2.9.3
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv
+
+#-- останавливаем и удаляем экземлпяр постгреса 
+house@pgsql1:~$ sudo systemctl stop postgresql@14-main
+house@pgsql1:~$ sudo -u postgres pg_dropcluster 14 main
+Warning: systemd was not informed about the removed cluster yet. Operations like "service postgresql start" might fail. To fix, run:
+  sudo systemctl daemon-reload
+house@pgsql1:~$ pg_lsclusters
+Ver Cluster Port Status Owner Data directory Log file
+
+
+#--Ставим патрони
+house@pgsql1:~$ sudo pip3 install patroni[etcd]
+Collecting patroni[etcd]
+  Downloading patroni-2.1.4-py3-none-any.whl (225 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 225.0/225.0 KB 3.2 MB/s eta 0:00:00
+Requirement already satisfied: PyYAML in /usr/lib/python3/dist-packages (from patroni[etcd]) (5.4.1)
+Collecting python-dateutil
+  Downloading python_dateutil-2.8.2-py2.py3-none-any.whl (247 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 247.7/247.7 KB 18.9 MB/s eta 0:00:00
+Requirement already satisfied: click>=4.1 in /usr/lib/python3/dist-packages (from patroni[etcd]) (8.0.3)
+Collecting psutil>=2.0.0
+  Downloading psutil-5.9.1-cp310-cp310-manylinux_2_12_x86_64.manylinux2010_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl (282 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 282.0/282.0 KB 30.5 MB/s eta 0:00:00
+Collecting ydiff>=1.2.0
+  Downloading ydiff-1.2.tar.gz (42 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 42.8/42.8 KB 8.5 MB/s eta 0:00:00
+  Preparing metadata (setup.py) ... done
+Requirement already satisfied: six>=1.7 in /usr/lib/python3/dist-packages (from patroni[etcd]) (1.16.0)
+Collecting prettytable>=0.7
+  Downloading prettytable-3.4.0-py3-none-any.whl (27 kB)
+Requirement already satisfied: urllib3!=1.21,>=1.19.1 in /usr/lib/python3/dist-packages (from patroni[etcd]) (1.26.5)
+Collecting python-etcd<0.5,>=0.4.3
+  Downloading python-etcd-0.4.5.tar.gz (37 kB)
+  Preparing metadata (setup.py) ... done
+Collecting wcwidth
+  Downloading wcwidth-0.2.5-py2.py3-none-any.whl (30 kB)
+Collecting dnspython>=1.13.0
+  Downloading dnspython-2.2.1-py3-none-any.whl (269 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 269.1/269.1 KB 35.0 MB/s eta 0:00:00
+Building wheels for collected packages: python-etcd, ydiff
+  Building wheel for python-etcd (setup.py) ... done
+  Created wheel for python-etcd: filename=python_etcd-0.4.5-py3-none-any.whl size=38501 sha256=7183a2d7a76a5a13233a679c52fa0021dbee068e096595b457ccc2e97e317149
+  Stored in directory: /root/.cache/pip/wheels/93/5f/1b/056db07a0ab1c0b7efe175928d2a10b614e0e00d7bab0b6496
+  Building wheel for ydiff (setup.py) ... done
+  Created wheel for ydiff: filename=ydiff-1.2-py3-none-any.whl size=16646 sha256=dcebb5fbf0e0def96b916048e36f4cfe7bb82b0aa54c15f2312dced8d676032e
+  Stored in directory: /root/.cache/pip/wheels/90/7e/61/6522f5bd67c80b8327ade6945c29042b6cd077a2683b8dd47c
+Successfully built python-etcd ydiff
+Installing collected packages: ydiff, wcwidth, python-dateutil, psutil, prettytable, dnspython, python-etcd, patroni
+Successfully installed dnspython-2.2.1 patroni-2.1.4 prettytable-3.4.0 psutil-5.9.1 python-dateutil-2.8.2 python-etcd-0.4.5 wcwidth-0.2.5 ydiff-1.2
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv
+
+
+
+#-- делаем симлинк
+house@pgsql1:~$ sudo ln -s /usr/local/bin/patroni /bin/patroni
+
+
+cat temp2.cfg | sudo tee -a /etc/patroni.yml):543232
+scope: patroni
+name: pgsql1
+restapi:
+  listen: 10.129.0.22:8008
+  connect_address: 10.129.0.22:8008
+etcd:
+  hosts: etcd1.ru-central1.internal:2379,etcd2.ru-central1.internal:2379,etcd3.ru-central1.internal:2379
+bootstrap:
+  dcs:
+    ttl: 30
+    loop_wait: 10
+    retry_timeout: 10
+    maximum_lag_on_failover: 1048576
+    postgresql:
+      use_pg_rewind: true
+      parameters:
+  initdb:
+  - encoding: UTF8
+  - data-checksums
+  pg_hba:
+  - host replication replicator 10.0.0.0/8 md5
+  - host all all 10.0.0.0/8 md5
+  users:
+    admin:
+      password: admin_321
+      options:
+        - createrole
+        - createdb
+postgresql:
+  listen: 127.0.0.1, 10.129.0.22:5432
+  connect_address: 10.129.0.22:5432
+  data_dir: /var/lib/postgresql/14/main
+  bin_dir: /usr/lib/postgresql/14/bin
+  pgpass: /tmp/pgpass0
+  authentication:
+    replication:
+      username: replicator
+      password: rep-pass_321
+    superuser:
+      username: postgres
+      password: zalando_321
+    rewind:
+      username: rewind_user
+      password: rewind_password_321
+  parameters:
+    unix_socket_directories: '.'
+tags:
+    nofailover: false
+    noloadbalance: false
+    clonefrom: false
+    nosync: false
+
+cat temp.cfg | sudo tee -a /etc/systemd/system/patroni.service
+[Unit]
+Description=High availability PostgreSQL Cluster
+After=syslog.target network.target
+[Service]
+Type=simple
+User=postgres
+Group=postgres
+ExecStart=/usr/local/bin/patroni /etc/patroni.yml
+KillMode=process
+TimeoutSec=30
+Restart=no
+[Install]
+WantedBy=multi-user.target
+
+
+house@pgsql1:~$ sudo -u postgres patroni /etc/patroni.yml
+2022-08-26 20:57:55,854 INFO: Selected new etcd server http://etcd2.ru-central1.internal:2379
+2022-08-26 20:57:55,859 INFO: No PostgreSQL configuration items changed, nothing to reload.
+2022-08-26 20:57:55,868 INFO: Lock owner: None; I am pgsql1
+2022-08-26 20:57:55,871 INFO: waiting for leader to bootstrap
+2022-08-26 20:58:05,863 INFO: Lock owner: None; I am pgsql1
+2022-08-26 20:58:05,871 INFO: waiting for leader to bootstrap
+2022-08-26 20:58:15,863 INFO: Lock owner: None; I am pgsql1
+2022-08-26 20:58:15,867 INFO: waiting for leader to bootstrap
+2022-08-26 20:58:25,863 INFO: Lock owner: None; I am pgsql1
+2022-08-26 20:58:25,867 INFO: waiting for leader to bootstrap
+2022-08-26 20:58:35,863 INFO: Lock owner: None; I am pgsql1
+2022-08-26 20:58:35,868 INFO: waiting for leader to bootstrap
+2022-08-26 20:58:45,863 INFO: Lock owner: None; I am pgsql1
+2022-08-26 20:58:45,867 INFO: waiting for leader to bootstrap
+^Chouse@pgsql1:~$
