@@ -1,0 +1,18 @@
+house@pgsql1:~$ sudo -u postgres patroni /etc/patroni.yml
+2022-08-28 19:48:44,919 INFO: Selected new etcd server http://etcd1.ru-central1.internal:2379
+2022-08-28 19:48:44,923 INFO: No PostgreSQL configuration items changed, nothing to reload.
+2022-08-28 19:48:44,927 INFO: Lock owner: None; I am pgsql1
+2022-08-28 19:48:44,930 INFO: waiting for leader to bootstrap
+2022-08-28 19:48:54,928 INFO: Lock owner: None; I am pgsql1
+2022-08-28 19:48:54,931 INFO: waiting for leader to bootstrap
+^Chouse@pgsql1:~sudo systemctl enable patronini
+house@pgsql1:~$ sudo systemctl is-enabled patroni
+enabled
+house@pgsql1:~$ sudo systemctl start patroni
+house@pgsql1:~$ sudo patronictl -c /etc/patroni.yml list
++--------+-------------+---------+---------+----+-----------+
+| Member |     Host    |   Role  |  State  | TL | Lag in MB |
++ Cluster: patroni (7135922292955924720) --+----+-----------+
+| pgsql1 | 10.129.0.22 | Replica | stopped |    |   unknown |
++--------+-------------+---------+---------+----+-----------+
+
