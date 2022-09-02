@@ -1,0 +1,691 @@
+#Построить отказоустойчивый кластер PostgreSQL в облаках на базе Патрони.
+
+
+
+#-- проверим, что c etcd
+house@etcd1:~$ hostname; ps -aef | grep etcd | grep -v grep
+etcd1
+etcd        2661       1  0 19:34 ?        00:00:00 /usr/bin/etcd
+
+house@etcd2:~$ hostname; ps -aef | grep etcd | grep -v grep
+etcd2
+etcd        2768       1  0 19:35 ?        00:00:00 /usr/bin/etcd
+
+house@etcd3:~$ hostname; ps -aef | grep etcd | grep -v grep
+etcd3
+etcd        2124       1  0 19:35 ?        00:00:00 /usr/bin/etcd
+
+#Остановил етсд на 3 хостах 
+sudo systemctl stop etcd
+
+
+#Выдал права 
+house@etcd1:/var/lib/etcd$ sudo chmod 777 /var/lib/etcd/
+
+#прописал ДНС
+
+#--на 3 хостах добавим в файлы с конфигами /etc/default/etcd:
+
+cat > temp.cfg << EOF 
+ETCD_NAME="$(hostname)"
+ETCD_LISTEN_CLIENT_URLS="http://0.0.0.0:2379"
+ETCD_ADVERTISE_CLIENT_URLS="http://$(hostname):2379"
+ETCD_LISTEN_PEER_URLS="http://0.0.0.0:2380"
+ETCD_INITIAL_ADVERTISE_PEER_URLS="http://$(hostname):2380"
+ETCD_INITIAL_CLUSTER_TOKEN="PatroniCluster"
+ETCD_INITIAL_CLUSTER="etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380"
+ETCD_INITIAL_CLUSTER_STATE="new"
+ETCD_DATA_DIR="/var/lib/etcd"
+EOF
+cat temp.cfg | sudo tee -a /etc/default/etcd
+
+
+#-- проверка автозагрузки
+house@etcd1:~$ systemctl is-enabled etcd
+enabled
+
+# кластера здороы
+house@etcd1:~$ etcdctl cluster-health
+member 9a1f33941721f94d is healthy: got healthy result from http://etcd1:2379
+member 9df0146dd9068bd2 is healthy: got healthy result from http://etcd3:2379
+member f2aeb69aaf7ffcbf is healthy: got healthy result from http://etcd2:2379
+cluster is healthy
+
+
+
+#--Изменил конфиг - патрони развернул, уронил 1 ноду - лидер переключился на 3 ноду.
+house@pgsql1:~$ sudo patronictl -c /etc/patroni.yml list
++--------+-------------+---------+---------+----+-----------+
+| Member |     Host    |   Role  |  State  | TL | Lag in MB |
++ Cluster: patroni1 (7137356545074075286) -+----+-----------+
+| pgsql1 | 10.129.0.22 | Leader  | running |  2 |           |
+| pgsql2 | 10.129.0.34 | Replica | running |  2 |        15 |
+| pgsql3 | 10.129.0.23 | Replica | running |  2 |         0 |
++--------+-------------+---------+---------+----+-----------+
+
+house@pgsql1:~$ sudo systemctl stop patroni
+
+house@pgsql1:~$ sudo patronictl -c /etc/patroni.yml list
++--------+-------------+---------+---------+----+-----------+
+| Member |     Host    |   Role  |  State  | TL | Lag in MB |
++ Cluster: patroni1 (7137356545074075286) -+----+-----------+
+| pgsql1 | 10.129.0.22 | Replica | stopped |    |   unknown |
+| pgsql2 | 10.129.0.34 | Replica | running |  2 |        31 |
+| pgsql3 | 10.129.0.23 | Leader  | running |  3 |           |
++--------+-------------+---------+---------+----+-----------+
+
+#-- установим pg_bouncer на каждом хосте с Патрони
+
+sudo apt install -y pgbouncer
+
+#зальем конфиг на 3 ноды
+cat > temp3.cfg << EOF 
+[databases]
+otus = host=127.0.0.1 port=5432 dbname=otus 
+[pgbouncer]
+logfile = /var/log/postgresql/pgbouncer.log
+pidfile = /var/run/postgresql/pgbouncer.pid
+listen_addr = *
+listen_port = 6432
+auth_type = md5
+auth_file = /etc/pgbouncer/userlist.txt
+admin_users = admindb
+EOF
+cat temp3.cfg | sudo tee -a /etc/pgbouncer/pgbouncer.ini
+
+
+#зальем конфиг на 3 ноды
+cat > temp4.cfg << EOF 
+"admindb" "d9cfab6a2f1a0eb0c037e605cd578025"
+EOF
+cat temp4.cfg | sudo tee -a /etc/pgbouncer/userlist.txt
+
+#pgbouncer статус
+house@postgres:~$ sudo systemctl status pgbouncer
+● pgbouncer.service - pgbouncer PostgreSQL connection pooler
+     Loaded: loaded (/lib/systemd/system/pgbouncer.service; enabled; vendor preset: enabled)
+     Active: active (running) since Thu 2022-05-26 20:51:13 UTC; 21min ago
+   Main PID: 2175 (pgbouncer)
+     Status: "stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 μs, query 0 μs, wait 0 μs"
+      Tasks: 2 (limit: 2311)
+     Memory: 1.2M
+     CGroup: /system.slice/pgbouncer.service
+             └─2175 /usr/sbin/pgbouncer /etc/pgbouncer/pgbouncer.ini
+
+May 26 21:03:13 postgres pgbouncer[2175]: stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 us, query 0 us, wait 0 us
+May 26 21:04:13 postgres pgbouncer[2175]: stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 us, query 0 us, wait 0 us
+May 26 21:05:13 postgres pgbouncer[2175]: stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 us, query 0 us, wait 0 us
+May 26 21:06:13 postgres pgbouncer[2175]: stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 us, query 0 us, wait 0 us
+May 26 21:07:13 postgres pgbouncer[2175]: stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 us, query 0 us, wait 0 us
+May 26 21:08:13 postgres pgbouncer[2175]: stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 us, query 0 us, wait 0 us
+May 26 21:09:13 postgres pgbouncer[2175]: stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 us, query 0 us, wait 0 us
+May 26 21:10:13 postgres pgbouncer[2175]: stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 us, query 0 us, wait 0 us
+May 26 21:11:13 postgres pgbouncer[2175]: stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 us, query 0 us, wait 0 us
+May 26 21:12:13 postgres pgbouncer[2175]: stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 us, query 0 us, wait 0 us
+
+#--настроил на на 3 ноды userlist 
+house@postgres:~$sudo nano /etc/pgbouncer/userlist.txt
+"postgres"  "SCRAM-SHA-256$4096:5QzE5QKo/Y0sUSKxIIhmBA==$mViw6DFyxLkcRRDyft3UOoJ/JGw5zRyvpOJnkt+EtmI=:8gi9vxsVajxpmcVZb3gqjnecPeXoel/eBqk3pEbbX7k="
+
+
+house@postgres:~$ sudo nano /etc/pgbouncer/pgbouncer.ini
+admin_users = postgres
+
+
+#--На след день 1 и 2 ноды не стартанули - перезапуск патрони и ВМ не помогает
+house@pgsql1:~$ sudo patronictl -c /etc/patroni.yml list
++--------+-------------+---------+--------------+----+-----------+
+| Member |     Host    |   Role  |    State     | TL | Lag in MB |
++ Cluster: patroni1 (7137356545074075286) ------+----+-----------+
+| pgsql1 | 10.129.0.22 | Replica | starting     |    |   unknown |
+| pgsql2 | 10.129.0.34 | Replica | start failed |    |   unknown |
+| pgsql3 | 10.129.0.23 | Leader  | running      |  4 |           |
++--------+-------------+---------+--------------+----+-----------+
+
+
+house@pgsql1:~$ sudo journalctl -eu patroni.service
+Aug 31 13:59:13 pgsql1 patroni[651]: 2022-08-31 13:59:13,202 INFO: establishing a new patroni connection to the postgres cluster
+Aug 31 13:59:13 pgsql1 patroni[2054]: 2022-08-31 13:59:13.204 UTC [2054] FATAL:  the database system is starting up
+Aug 31 13:59:13 pgsql1 patroni[651]: 2022-08-31 13:59:13,204 WARNING: Retry got exception: 'connection problems'
+Aug 31 13:59:13 pgsql1 patroni[651]: 2022-08-31 13:59:13,205 WARNING: Failed to determine PostgreSQL state from the connection, falling bac>
+Aug 31 13:59:13 pgsql1 patroni[651]: 2022-08-31 13:59:13,209 INFO: no action. I am (pgsql1), a secondary, and following a leader (pgsql3)
+Aug 31 13:59:22 pgsql1 patroni[2056]: 2022-08-31 13:59:22.698 UTC [2056] FATAL:  the database system is starting up
+Aug 31 13:59:22 pgsql1 patroni[2055]: localhost:5432 - rejecting connections
+Aug 31 13:59:22 pgsql1 patroni[651]: 2022-08-31 13:59:22,700 INFO: Lock owner: pgsql3; I am pgsql1
+Aug 31 13:59:22 pgsql1 patroni[651]: 2022-08-31 13:59:22,700 INFO: Still starting up as a standby.
+Aug 31 13:59:22 pgsql1 patroni[651]: 2022-08-31 13:59:22,701 INFO: Lock owner: pgsql3; I am pgsql1
+Aug 31 13:59:22 pgsql1 patroni[651]: 2022-08-31 13:59:22,701 INFO: establishing a new patroni connection to the postgres cluster
+Aug 31 13:59:22 pgsql1 patroni[2058]: 2022-08-31 13:59:22.702 UTC [2058] FATAL:  the database system is starting up
+Aug 31 13:59:22 pgsql1 patroni[651]: 2022-08-31 13:59:22,953 INFO: establishing a new patroni connection to the postgres cluster
+Aug 31 13:59:22 pgsql1 patroni[2059]: 2022-08-31 13:59:22.954 UTC [2059] FATAL:  the database system is starting up
+Aug 31 13:59:22 pgsql1 patroni[651]: 2022-08-31 13:59:22,955 WARNING: Retry got exception: 'connection problems'
+Aug 31 13:59:22 pgsql1 patroni[651]: 2022-08-31 13:59:22,955 WARNING: Failed to determine PostgreSQL state from the connection, falling bac>
+Aug 31 13:59:22 pgsql1 patroni[651]: 2022-08-31 13:59:22,959 INFO: no action. I am (pgsql1), a secondary, and following a leader (pgsql3)
+Aug 31 13:59:32 pgsql1 patroni[2132]: 2022-08-31 13:59:32.698 UTC [2132] FATAL:  the database system is starting up
+Aug 31 13:59:32 pgsql1 patroni[2131]: localhost:5432 - rejecting connections
+Aug 31 13:59:32 pgsql1 patroni[651]: 2022-08-31 13:59:32,699 INFO: Lock owner: pgsql3; I am pgsql1
+Aug 31 13:59:32 pgsql1 patroni[651]: 2022-08-31 13:59:32,699 INFO: Still starting up as a standby.
+Aug 31 13:59:32 pgsql1 patroni[651]: 2022-08-31 13:59:32,700 INFO: Lock owner: pgsql3; I am pgsql1
+Aug 31 13:59:32 pgsql1 patroni[651]: 2022-08-31 13:59:32,700 INFO: establishing a new patroni connection to the postgres cluster
+Aug 31 13:59:32 pgsql1 patroni[2133]: 2022-08-31 13:59:32.701 UTC [2133] FATAL:  the database system is starting up
+Aug 31 13:59:32 pgsql1 patroni[651]: 2022-08-31 13:59:32,992 INFO: establishing a new patroni connection to the postgres cluster
+Aug 31 13:59:32 pgsql1 patroni[2134]: 2022-08-31 13:59:32.994 UTC [2134] FATAL:  the database system is starting up
+Aug 31 13:59:32 pgsql1 patroni[651]: 2022-08-31 13:59:32,994 WARNING: Retry got exception: 'connection problems'
+Aug 31 13:59:32 pgsql1 patroni[651]: 2022-08-31 13:59:32,994 WARNING: Failed to determine PostgreSQL state from the connection, falling bac>
+Aug 31 13:59:33 pgsql1 patroni[651]: 2022-08-31 13:59:33,004 INFO: no action. I am (pgsql1), a secondary, and following a leader (pgsql3)
+
+
+
+house@pgsql2:~$ sudo journalctl -eu patroni.service
+Aug 31 13:58:42 pgsql2 patroni[650]:   Maximum size of a TOAST chunk: 1996
+Aug 31 13:58:42 pgsql2 patroni[650]:   Size of a large-object chunk: 2048
+Aug 31 13:58:42 pgsql2 patroni[650]:   Date/time type storage: 64-bit integers
+Aug 31 13:58:42 pgsql2 patroni[650]:   Float8 argument passing: by value
+Aug 31 13:58:42 pgsql2 patroni[650]:   Data page checksum version: 1
+Aug 31 13:58:42 pgsql2 patroni[650]:   Mock authentication nonce: e2202fe740a3a26add922b57557f1d11069922f438b0d3b2cb54f1bd1d0bbcc2
+Aug 31 13:58:42 pgsql2 patroni[650]: 2022-08-31 13:58:42,689 INFO: Lock owner: pgsql3; I am pgsql2
+Aug 31 13:58:42 pgsql2 patroni[650]: 2022-08-31 13:58:42,695 INFO: Local timeline=2 lsn=0/40000A0
+Aug 31 13:58:42 pgsql2 patroni[650]: 2022-08-31 13:58:42,709 INFO: master_timeline=5
+Aug 31 13:58:42 pgsql2 patroni[650]: 2022-08-31 13:58:42,709 INFO: master: history=1        0/1953E38        no recovery target specified
+Aug 31 13:58:42 pgsql2 patroni[650]: 2        0/60000A0        no recovery target specified
+Aug 31 13:58:42 pgsql2 patroni[650]: 3        0/6000230        no recovery target specified
+Aug 31 13:58:42 pgsql2 patroni[650]: 4        0/60003C0        no recovery target specified
+Aug 31 13:58:42 pgsql2 patroni[650]: 2022-08-31 13:58:42,709 INFO: Lock owner: pgsql3; I am pgsql2
+Aug 31 13:58:42 pgsql2 patroni[650]: 2022-08-31 13:58:42,713 INFO: starting as a secondary
+Aug 31 13:58:42 pgsql2 patroni[650]: 2022-08-31 13:58:42,856 INFO: postmaster pid=2139
+Aug 31 13:58:42 pgsql2 patroni[2140]: localhost:5432 - no response
+Aug 31 13:58:42 pgsql2 patroni[2139]: 2022-08-31 13:58:42.864 UTC [2139] LOG:  starting PostgreSQL 14.5 (Ubuntu 14.5-1.pgdg22.04+1) on x86_>
+Aug 31 13:58:42 pgsql2 patroni[2139]: 2022-08-31 13:58:42.864 UTC [2139] LOG:  listening on IPv4 address "127.0.0.1", port 5432
+Aug 31 13:58:42 pgsql2 patroni[2139]: 2022-08-31 13:58:42.868 UTC [2139] LOG:  listening on IPv4 address "10.129.0.34", port 5432
+Aug 31 13:58:42 pgsql2 patroni[2139]: 2022-08-31 13:58:42.871 UTC [2139] LOG:  listening on Unix socket "./.s.PGSQL.5432"
+Aug 31 13:58:42 pgsql2 patroni[2141]: 2022-08-31 13:58:42.877 UTC [2141] LOG:  database system was shut down in recovery at 2022-08-30 19:1>
+Aug 31 13:58:42 pgsql2 patroni[2141]: 2022-08-31 13:58:42.877 UTC [2141] LOG:  entering standby mode
+Aug 31 13:58:42 pgsql2 patroni[2141]: 2022-08-31 13:58:42.877 UTC [2141] LOG:  invalid resource manager ID in primary checkpoint record
+Aug 31 13:58:42 pgsql2 patroni[2141]: 2022-08-31 13:58:42.877 UTC [2141] PANIC:  could not locate a valid checkpoint record
+Aug 31 13:58:42 pgsql2 patroni[2139]: 2022-08-31 13:58:42.987 UTC [2139] LOG:  startup process (PID 2141) was terminated by signal 6: Abort>
+Aug 31 13:58:42 pgsql2 patroni[2139]: 2022-08-31 13:58:42.987 UTC [2139] LOG:  aborting startup due to startup process failure
+Aug 31 13:58:42 pgsql2 patroni[2139]: 2022-08-31 13:58:42.988 UTC [2139] LOG:  database system is shut down
+Aug 31 13:58:43 pgsql2 patroni[650]: 2022-08-31 13:58:43,864 ERROR: postmaster is not running
+
+
+house@pgsql3:~$ sudo journalctl -eu patroni.service
+Aug 31 13:53:02 pgsql3 patroni[650]: 2022-08-31 13:53:02,682 INFO: no action. I am (pgsql3), the leader with the lock
+Aug 31 13:53:12 pgsql3 patroni[650]: 2022-08-31 13:53:12,687 INFO: no action. I am (pgsql3), the leader with the lock
+Aug 31 13:53:22 pgsql3 patroni[650]: 2022-08-31 13:53:22,687 INFO: no action. I am (pgsql3), the leader with the lock
+Aug 31 13:53:32 pgsql3 patroni[650]: 2022-08-31 13:53:32,679 INFO: no action. I am (pgsql3), the leader with the lock
+Aug 31 13:53:42 pgsql3 patroni[650]: 2022-08-31 13:53:42,679 INFO: no action. I am (pgsql3), the leader with the lock
+Aug 31 13:53:52 pgsql3 patroni[650]: 2022-08-31 13:53:52,682 INFO: no action. I am (pgsql3), the leader with the lock
+Aug 31 13:54:02 pgsql3 patroni[650]: 2022-08-31 13:54:02,681 INFO: no action. I am (pgsql3), the leader with the lock
+Aug 31 13:54:12 pgsql3 patroni[650]: 2022-08-31 13:54:12,679 INFO: no action. I am (pgsql3), the leader with the lock
+Aug 31 13:54:22 pgsql3 patroni[650]: 2022-08-31 13:54:22,679 INFO: no action. I am (pgsql3), the leader with the lock
+Aug 31 13:54:32 pgsql3 patroni[650]: 2022-08-31 13:54:32,678 INFO: no action. I am (pgsql3), the leader with the lock
+Aug 31 13:54:42 pgsql3 patroni[650]: 2022-08-31 13:54:42,679 INFO: no action. I am (pgsql3), the leader with the lock
+Aug 31 13:54:52 pgsql3 patroni[650]: 2022-08-31 13:54:52,680 INFO: no action. I am (pgsql3), the leader with the lock
+Aug 31 13:55:02 pgsql3 patroni[650]: 2022-08-31 13:55:02,679 INFO: no action. I am (pgsql3), the leader with the lock
+Aug 31 13:55:12 pgsql3 patroni[650]: 2022-08-31 13:55:12,680 INFO: no action. I am (pgsql3), the leader with the lock
+Aug 31 13:55:22 pgsql3 patroni[650]: 2022-08-31 13:55:22,682 INFO: no action. I am (pgsql3), the leader with the lock
+Aug 31 13:55:32 pgsql3 patroni[650]: 2022-08-31 13:55:32,678 INFO: no action. I am (pgsql3), the leader with the lock
+Aug 31 13:55:42 pgsql3 patroni[650]: 2022-08-31 13:55:42,679 INFO: no action. I am (pgsql3), the leader with the lock
+Aug 31 13:55:52 pgsql3 patroni[650]: 2022-08-31 13:55:52,678 INFO: no action. I am (pgsql3), the leader with the lock
+Aug 31 13:56:02 pgsql3 patroni[650]: 2022-08-31 13:56:02,681 INFO: no action. I am (pgsql3), the leader with the lock
+Aug 31 13:56:12 pgsql3 patroni[650]: 2022-08-31 13:56:12,679 INFO: no action. I am (pgsql3), the leader with the lock
+Aug 31 13:56:22 pgsql3 patroni[650]: 2022-08-31 13:56:22,679 INFO: no action. I am (pgsql3), the leader with the lock
+Aug 31 13:56:32 pgsql3 patroni[650]: 2022-08-31 13:56:32,681 INFO: no action. I am (pgsql3), the leader with the lock
+Aug 31 13:56:42 pgsql3 patroni[650]: 2022-08-31 13:56:42,679 INFO: no action. I am (pgsql3), the leader with the lock
+Aug 31 13:56:52 pgsql3 patroni[650]: 2022-08-31 13:56:52,680 INFO: no action. I am (pgsql3), the leader with the lock
+Aug 31 13:57:02 pgsql3 patroni[650]: 2022-08-31 13:57:02,682 INFO: no action. I am (pgsql3), the leader with the lock
+Aug 31 13:57:12 pgsql3 patroni[650]: 2022-08-31 13:57:12,680 INFO: no action. I am (pgsql3), the leader with the lock
+Aug 31 13:57:22 pgsql3 patroni[650]: 2022-08-31 13:57:22,681 INFO: no action. I am (pgsql3), the leader with the lock
+Aug 31 13:57:32 pgsql3 patroni[650]: 2022-08-31 13:57:32,681 INFO: no action. I am (pgsql3), the leader with the lock
+Aug 31 13:57:42 pgsql3 patroni[650]: 2022-08-31 13:57:42,678 INFO: no action. I am (pgsql3), the leader with the lock
+
+
+
+
+
+
+----------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+----Удалил кластеры с патрони - создал новые.
+----etcd оставил старые
+
+house@etcd1:~$ etcdctl cluster-health
+member 9a1f33941721f94d is healthy: got healthy result from http://etcd1.ru-central1.internal:2379
+member 9df0146dd9068bd2 is healthy: got healthy result from http://etcd3.ru-central1.internal:2379
+member f2aeb69aaf7ffcbf is healthy: got healthy result from http://etcd2.ru-central1.internal:2379
+cluster is healthy
+
+
+
+----Проверил пинги
+
+house@etcd1:~$ ping pgsql1
+PING pgsql1.ru-central1.internal (10.129.0.24) 56(84) bytes of data.
+64 bytes from pgsql1.ru-central1.internal (10.129.0.24): icmp_seq=1 ttl=63 time=0.387 ms
+
+house@pgsql1:~$ ping etcd1
+PING etcd1.ru-central1.internal (10.129.0.21) 56(84) bytes of data.
+64 bytes from etcd1.ru-central1.internal (10.129.0.21): icmp_seq=1 ttl=63 time=1.01 ms
+
+
+
+#-- установка: постгрес на 3 ноды
+sudo apt update && sudo apt upgrade -y -q && echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee -a /etc/apt/sources.list.d/pgdg.list && wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add - && sudo apt-get update && sudo apt -y install postgresql-14
+
+
+#----убедимся, что кластера Постгреса стартовали
+house@pgsql1:~$ hostname; pg_lsclusters
+pgsql1
+Ver Cluster Port Status Owner    Data directory              Log file
+14  main    5432 online postgres /var/lib/postgresql/14/main /var/log/postgresql/postgresql-14-main.log
+
+
+#----ставим питон на 1 ноде
+sudo apt-get install -y python3 python3-pip git mc
+sudo pip3 install psycopg2-binary 
+
+#---- после установки ПО останавливаем и удаляем экземлпяр постгреса который запускается по-умолчанию:
+house@pgsql1:~$ sudo systemctl stop postgresql@14-main
+house@pgsql1:~$ sudo -u postgres pg_dropcluster 14 main
+Warning: systemd was not informed about the removed cluster yet. Operations like "service postgresql start" might fail. To fix, run:
+  sudo systemctl daemon-reload
+
+#----убеждемся что их нет
+house@pgsql1:~$ pg_lsclusters
+Ver Cluster Port Status Owner Data directory Log file
+
+#----патрони 
+sudo pip3 install patroni[etcd]
+
+#----делаем симлинк
+sudo ln -s /usr/local/bin/patroni /bin/patroni
+
+#---- закидываем конфиги
+
+----1
+cat > temp.cfg << EOF 
+[Unit]
+Description=High availability PostgreSQL Cluster
+After=syslog.target network.target
+[Service]
+Type=simple
+User=postgres
+Group=postgres
+ExecStart=/usr/local/bin/patroni /etc/patroni.yml
+KillMode=process
+TimeoutSec=30
+Restart=no
+[Install]
+WantedBy=multi-user.target
+EOF
+cat temp.cfg | sudo tee -a /etc/systemd/system/patroni.service
+
+
+----2
+cat > temp2.cfg << EOF 
+scope: patroni2
+name: $(hostname)
+restapi:
+  listen: $(hostname -I | tr -d " "):8008
+  connect_address: $(hostname -I | tr -d " "):8008
+etcd:
+  hosts: etcd1.ru-central1.internal:2379,etcd2.ru-central1.internal:2379,etcd3.ru-central1.internal:2379
+bootstrap:
+  dcs:
+    ttl: 30
+    loop_wait: 10
+    retry_timeout: 10
+    maximum_lag_on_failover: 1048576
+    postgresql:
+      use_pg_rewind: true
+      parameters:
+  initdb: 
+  - encoding: UTF8
+  - data-checksums
+  pg_hba: 
+  - host replication replicator 10.0.0.0/8 md5
+  - host all all 10.0.0.0/8 md5
+  users:
+    admin:
+      password: admin_321
+      options:
+        - createrole
+        - createdb
+postgresql:
+  listen: 127.0.0.1, $(hostname -I | tr -d " "):5432
+  connect_address: $(hostname -I | tr -d " "):5432
+  data_dir: /var/lib/postgresql/14/main
+  bin_dir: /usr/lib/postgresql/14/bin
+  pgpass: /tmp/pgpass0
+  authentication:
+    replication:
+      username: replicator
+      password: rep-pass_321
+    superuser:
+      username: postgres
+      password: zalando_321
+    rewind:  
+      username: rewind_user
+      password: rewind_password_321
+  parameters:
+    unix_socket_directories: '.'
+tags:
+    nofailover: false
+    noloadbalance: false
+    clonefrom: false
+    nosync: false
+EOF
+cat temp2.cfg | sudo tee -a /etc/patroni.yml
+
+
+
+#----бутстрапим команда не заканчивается выдает: not healthy enough for leader race
+#----Прерываю, в итоге все ок 
+
+house@pgsql1:~$ sudo -u postgres patroni /etc/patroni.yml
+2022-09-02 14:38:20,021 INFO: Selected new etcd server http://etcd2.ru-central1.internal:2379
+2022-09-02 14:38:20,026 INFO: No PostgreSQL configuration items changed, nothing to reload.
+2022-09-02 14:38:20,033 INFO: Lock owner: None; I am pgsql1
+2022-09-02 14:38:20,038 INFO: trying to bootstrap a new cluster
+could not change directory to "/home/house": Permission denied
+The files belonging to this database system will be owned by user "postgres".
+This user must also own the server process.
+
+The database cluster will be initialized with locale "en_US.UTF-8".
+The default text search configuration will be set to "english".
+
+Data page checksums are enabled.
+
+creating directory /var/lib/postgresql/14/main ... ok
+creating subdirectories ... ok
+selecting dynamic shared memory implementation ... posix
+selecting default max_connections ... 100
+selecting default shared_buffers ... 128MB
+selecting default time zone ... Etc/UTC
+creating configuration files ... ok
+running bootstrap script ... ok
+performing post-bootstrap initialization ... ok
+syncing data to disk ... ok
+
+initdb: warning: enabling "trust" authentication for local connections
+You can change this by editing pg_hba.conf or using the option -A, or
+--auth-local and --auth-host, the next time you run initdb.
+
+Success. You can now start the database server using:
+
+    /usr/lib/postgresql/14/bin/pg_ctl -D /var/lib/postgresql/14/main -l logfile start
+
+could not change directory to "/home/house": Permission denied
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/usr/lib/python3.10/multiprocessing/spawn.py", line 116, in spawn_main
+    exitcode = _main(fd, parent_sentinel)
+  File "/usr/lib/python3.10/multiprocessing/spawn.py", line 125, in _main
+    prepare(preparation_data)
+  File "/usr/lib/python3.10/multiprocessing/spawn.py", line 225, in prepare
+    os.chdir(data['dir'])
+PermissionError: [Errno 13] Permission denied: '/home/house'
+2022-09-02 14:38:30,030 INFO: Lock owner: None; I am pgsql1
+2022-09-02 14:38:30,030 INFO: not healthy enough for leader race
+2022-09-02 14:38:30,037 INFO: bootstrap in progress
+2022-09-02 14:38:40,030 INFO: Lock owner: None; I am pgsql1
+...
+...
+...
+...
+2022-09-02 14:39:50,030 INFO: not healthy enough for leader race
+2022-09-02 14:39:50,034 INFO: bootstrap in progress
+2022-09-02 14:40:00,030 INFO: Lock owner: None; I am pgsql1
+2022-09-02 14:40:00,030 INFO: not healthy enough for leader race
+2022-09-02 14:40:00,034 INFO: bootstrap in progress
+^C^CException ignored in: <module 'threading' from '/usr/lib/python3.10/threading.py'>
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/threading.py", line 1560, in _shutdown
+    lock.acquire()
+KeyboardInterrupt:
+
+
+#----Ставим автозапуск и запускаем
+house@pgsql1:~$ sudo systemctl is-enabled patroni
+disabled
+
+house@pgsql1:~$ sudo systemctl enable patroni
+Created symlink /etc/systemd/system/multi-user.target.wants/patroni.service → /etc/systemd/system/patroni.service.
+
+house@pgsql1:~$ sudo systemctl status patroni
+○ patroni.service - High availability PostgreSQL Cluster
+     Loaded: loaded (/etc/systemd/system/patroni.service; enabled; vendor preset: enabled)
+     Active: inactive (dead)
+	 
+house@pgsql1:~$ sudo systemctl start patroni
+
+house@pgsql1:~$ sudo systemctl status patroni
+● patroni.service - High availability PostgreSQL Cluster
+     Loaded: loaded (/etc/systemd/system/patroni.service; enabled; vendor preset: enabled)
+     Active: active (running) since Fri 2022-09-02 14:41:36 UTC; 4s ago
+   Main PID: 18135 (patroni)
+      Tasks: 13 (limit: 2236)
+     Memory: 65.2M
+        CPU: 420ms
+     CGroup: /system.slice/patroni.service
+             ├─18135 /usr/bin/python3 /usr/local/bin/patroni /etc/patroni.yml
+             ├─18148 /usr/lib/postgresql/14/bin/postgres -D /var/lib/postgresql/14/main --config-file=/var/lib/postgresql/14/main/postgresql.c>
+             ├─18151 "postgres: patroni2: checkpointer " "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" ">
+             ├─18152 "postgres: patroni2: background writer " "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "">
+             ├─18153 "postgres: patroni2: stats collector " "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" ">
+             ├─18158 "postgres: patroni2: postgres postgres 127.0.0.1(57324) idle" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "">
+             ├─18166 "postgres: patroni2: walwriter " "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" ">
+             ├─18167 "postgres: patroni2: autovacuum launcher " "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" >
+             └─18168 "postgres: patroni2: logical replication launcher " "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" >
+
+Sep 02 14:41:37 pgsql1 patroni[18135]: connection to server at "localhost" (127.0.0.1), port 5432 failed: FATAL:  role "replicator" does not e>
+Sep 02 14:41:37 pgsql1 patroni[18135]: 2022-09-02 14:41:37,846 INFO: promoted self to leader by acquiring session lock
+Sep 02 14:41:37 pgsql1 patroni[18161]: server promoting
+Sep 02 14:41:37 pgsql1 patroni[18150]: 2022-09-02 14:41:37.847 UTC [18150] LOG:  received promote request
+Sep 02 14:41:37 pgsql1 patroni[18150]: 2022-09-02 14:41:37.847 UTC [18150] LOG:  redo is not required
+Sep 02 14:41:37 pgsql1 patroni[18135]: 2022-09-02 14:41:37,848 INFO: cleared rewind state after becoming the leader
+Sep 02 14:41:37 pgsql1 patroni[18150]: 2022-09-02 14:41:37.853 UTC [18150] LOG:  selected new timeline ID: 2
+Sep 02 14:41:39 pgsql1 patroni[18150]: 2022-09-02 14:41:39.054 UTC [18150] LOG:  archive recovery complete
+Sep 02 14:41:39 pgsql1 patroni[18148]: 2022-09-02 14:41:39.081 UTC [18148] LOG:  database system is ready to accept connections
+Sep 02 14:41:39 pgsql1 patroni[18135]: 2022-09-02 14:41:39,943 INFO: no action. I am (pgsql1), the leader with the lock
+lines 1-28/28 (END)
+
+
+house@pgsql1:~$ sudo patronictl -c /etc/patroni.yml list
++--------+-------------+--------+---------+----+-----------+
+| Member | Host        | Role   | State   | TL | Lag in MB |
++ Cluster: patroni2 (7138791844683556511) +----+-----------+
+| pgsql1 | 10.129.0.24 | Leader | running |  2 |           |
++--------+-------------+--------+---------+----+-----------+
+
+
+
+
+#----На 2 и 3 нодах бутстрап заканчивался другой ошибкой
+
+house@pgsql3:~$ sudo -u postgres patroni /etc/patroni.yml
+2022-09-02 15:32:21,996 INFO: Selected new etcd server http://etcd3.ru-central1.internal:2379
+2022-09-02 15:32:22,002 INFO: No PostgreSQL configuration items changed, nothing to reload.
+2022-09-02 15:32:22,008 INFO: Lock owner: pgsql1; I am pgsql3
+2022-09-02 15:32:22,011 INFO: trying to bootstrap from leader 'pgsql1'
+could not change directory to "/home/house": Permission denied
+pg_basebackup: error: connection to server at "10.129.0.24", port 5432 failed: FATAL:  password authentication failed for user "replicator"
+password retrieved from file "/tmp/pgpass0"
+2022-09-02 15:32:22,029 ERROR: Error when fetching backup: pg_basebackup exited with code=1
+2022-09-02 15:32:22,029 WARNING: Trying again in 5 seconds
+could not change directory to "/home/house": Permission denied
+pg_basebackup: error: connection to server at "10.129.0.24", port 5432 failed: FATAL:  password authentication failed for user "replicator"
+password retrieved from file "/tmp/pgpass0"
+2022-09-02 15:32:27,049 ERROR: Error when fetching backup: pg_basebackup exited with code=1
+2022-09-02 15:32:27,049 ERROR: failed to bootstrap from leader 'pgsql1'
+2022-09-02 15:32:27,049 INFO: Removing data directory: /var/lib/postgresql/14/main
+2022-09-02 15:32:32,006 INFO: Lock owner: pgsql1; I am pgsql3
+2022-09-02 15:32:32,012 INFO: trying to bootstrap from leader 'pgsql1'
+could not change directory to "/home/house": Permission denied
+pg_basebackup: error: connection to server at "10.129.0.24", port 5432 failed: FATAL:  password authentication failed for user "replicator"
+password retrieved from file "/tmp/pgpass0"
+2022-09-02 15:32:32,029 ERROR: Error when fetching backup: pg_basebackup exited with code=1
+2022-09-02 15:32:32,029 WARNING: Trying again in 5 seconds
+could not change directory to "/home/house": Permission denied
+pg_basebackup: error: connection to server at "10.129.0.24", port 5432 failed: FATAL:  password authentication failed for user "replicator"
+password retrieved from file "/tmp/pgpass0"
+2022-09-02 15:32:37,050 ERROR: Error when fetching backup: pg_basebackup exited with code=1
+2022-09-02 15:32:37,050 ERROR: failed to bootstrap from leader 'pgsql1'
+2022-09-02 15:32:37,050 INFO: Removing data directory: /var/lib/postgresql/14/main
+2022-09-02 15:32:42,006 INFO: Lock owner: pgsql1; I am pgsql3
+2022-09-02 15:32:42,010 INFO: trying to bootstrap from leader 'pgsql1'
+could not change directory to "/home/house": Permission denied
+pg_basebackup: error: connection to server at "10.129.0.24", port 5432 failed: FATAL:  password authentication failed for user "replicator"
+password retrieved from file "/tmp/pgpass0"
+2022-09-02 15:32:42,026 ERROR: Error when fetching backup: pg_basebackup exited with code=1
+2022-09-02 15:32:42,026 WARNING: Trying again in 5 seconds
+^Ccould not change directory to "/home/house": Permission denied
+pg_basebackup: error: connection to server at "10.129.0.24", port 5432 failed: FATAL:  password authentication failed for user "replicator"
+password retrieved from file "/tmp/pgpass0"
+
+
+#----Заупстил патрони 
+house@pgsql3:~$ sudo systemctl is-enabled patroni
+disabled
+
+house@pgsql3:~$ sudo systemctl enable patroni
+Created symlink /etc/systemd/system/multi-user.target.wants/patroni.service → /etc/systemd/system/patroni.service.
+
+house@pgsql3:~$ sudo systemctl status patroni
+○ patroni.service - High availability PostgreSQL Cluster
+     Loaded: loaded (/etc/systemd/system/patroni.service; enabled; vendor preset: enabled)
+     Active: inactive (dead)
+	 
+house@pgsql3:~$ sudo systemctl start patroni
+
+
+#----Проверил статус 
+house@pgsql3:~$ sudo systemctl status patroni
+● patroni.service - High availability PostgreSQL Cluster
+     Loaded: loaded (/etc/systemd/system/patroni.service; enabled; vendor preset: enabled)
+     Active: active (running) since Fri 2022-09-02 15:33:11 UTC; 5s ago
+   Main PID: 18312 (patroni)
+      Tasks: 5 (limit: 2236)
+     Memory: 27.6M
+        CPU: 249ms
+     CGroup: /system.slice/patroni.service
+             └─18312 /usr/bin/python3 /usr/local/bin/patroni /etc/patroni.yml
+
+Sep 02 15:33:11 pgsql3 patroni[18312]: 2022-09-02 15:33:11,766 INFO: trying to bootstrap from leader 'pgsql1'
+Sep 02 15:33:11 pgsql3 patroni[18318]: pg_basebackup: error: connection to server at "10.129.0.24", port 5432 failed: FATAL:  password authent>
+Sep 02 15:33:11 pgsql3 patroni[18318]: password retrieved from file "/tmp/pgpass0"
+Sep 02 15:33:11 pgsql3 patroni[18312]: 2022-09-02 15:33:11,783 ERROR: Error when fetching backup: pg_basebackup exited with code=1
+Sep 02 15:33:11 pgsql3 patroni[18312]: 2022-09-02 15:33:11,783 WARNING: Trying again in 5 seconds
+Sep 02 15:33:16 pgsql3 patroni[18319]: pg_basebackup: error: connection to server at "10.129.0.24", port 5432 failed: FATAL:  password authent>
+Sep 02 15:33:16 pgsql3 patroni[18319]: password retrieved from file "/tmp/pgpass0"
+Sep 02 15:33:16 pgsql3 patroni[18312]: 2022-09-02 15:33:16,803 ERROR: Error when fetching backup: pg_basebackup exited with code=1
+Sep 02 15:33:16 pgsql3 patroni[18312]: 2022-09-02 15:33:16,803 ERROR: failed to bootstrap from leader 'pgsql1'
+Sep 02 15:33:16 pgsql3 patroni[18312]: 2022-09-02 15:33:16,804 INFO: Removing data directory: /var/lib/postgresql/14/main
+
+
+#---- Проверил пинг 
+house@pgsql3:~$ ping pgsql1
+PING pgsql1.ru-central1.internal (10.129.0.24) 56(84) bytes of data.
+64 bytes from pgsql1.ru-central1.internal (10.129.0.24): icmp_seq=1 ttl=63 time=0.854 ms
+64 bytes from pgsql1.ru-central1.internal (10.129.0.24): icmp_seq=2 ttl=63 time=0.414 ms
+64 bytes from pgsql1.ru-central1.internal (10.129.0.24): icmp_seq=3 ttl=63 time=0.387 ms
+^C
+--- pgsql1.ru-central1.internal ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2011ms
+rtt min/avg/max/mdev = 0.387/0.551/0.854/0.214 ms
+
+
+#----
+house@pgsql1:~$ sudo patronictl -c /etc/patroni.yml list
++--------+-------------+---------+---------+----+-----------+
+| Member | Host        | Role    | State   | TL | Lag in MB |
++ Cluster: patroni2 (7138791844683556511) -+----+-----------+
+| pgsql1 | 10.129.0.24 | Leader  | running |  2 |           |
+| pgsql2 | 10.129.0.19 | Replica | stopped |    |   unknown |
+| pgsql3 | 10.129.0.15 | Replica | stopped |    |   unknown |
++--------+-------------+---------+---------+----+-----------+
+
+
+house@pgsql2:~$ sudo patronictl -c /etc/patroni.yml list
++--------+-------------+---------+---------+----+-----------+
+| Member | Host        | Role    | State   | TL | Lag in MB |
++ Cluster: patroni2 (7138791844683556511) -+----+-----------+
+| pgsql1 | 10.129.0.24 | Leader  | running |  2 |           |
+| pgsql2 | 10.129.0.19 | Replica | stopped |    |   unknown |
+| pgsql3 | 10.129.0.15 | Replica | stopped |    |   unknown |
++--------+-------------+---------+---------+----+-----------+
+
+
+#----Проверил журнал - не может подключиться к лидеру   trying to bootstrap from leader 'pgsql1'
+house@pgsql2:~$ sudo journalctl -eu patroni.service
+Sep 02 17:05:13 pgsql2 patroni[18027]: pg_basebackup: error: connection to server at "10.129.0.24", port 5432 failed: FATAL:  password authent>
+Sep 02 17:05:13 pgsql2 patroni[18027]: password retrieved from file "/tmp/pgpass0"
+Sep 02 17:05:13 pgsql2 patroni[18004]: 2022-09-02 17:05:13,198 ERROR: Error when fetching backup: pg_basebackup exited with code=1
+Sep 02 17:05:13 pgsql2 patroni[18004]: 2022-09-02 17:05:13,198 ERROR: failed to bootstrap from leader 'pgsql1'
+Sep 02 17:05:13 pgsql2 patroni[18004]: 2022-09-02 17:05:13,198 INFO: Removing data directory: /var/lib/postgresql/14/main
+Sep 02 17:05:18 pgsql2 patroni[18004]: 2022-09-02 17:05:18,150 INFO: Lock owner: pgsql1; I am pgsql2
+Sep 02 17:05:18 pgsql2 patroni[18004]: 2022-09-02 17:05:18,154 INFO: trying to bootstrap from leader 'pgsql1'
+Sep 02 17:05:18 pgsql2 patroni[18029]: pg_basebackup: error: connection to server at "10.129.0.24", port 5432 failed: FATAL:  password authent>
+Sep 02 17:05:18 pgsql2 patroni[18029]: password retrieved from file "/tmp/pgpass0"
+Sep 02 17:05:18 pgsql2 patroni[18004]: 2022-09-02 17:05:18,171 ERROR: Error when fetching backup: pg_basebackup exited with code=1
+Sep 02 17:05:18 pgsql2 patroni[18004]: 2022-09-02 17:05:18,171 WARNING: Trying again in 5 seconds
+Sep 02 17:05:23 pgsql2 patroni[18030]: pg_basebackup: error: connection to server at "10.129.0.24", port 5432 failed: FATAL:  password authent>
+Sep 02 17:05:23 pgsql2 patroni[18030]: password retrieved from file "/tmp/pgpass0"
+Sep 02 17:05:23 pgsql2 patroni[18004]: 2022-09-02 17:05:23,192 ERROR: Error when fetching backup: pg_basebackup exited with code=1
+Sep 02 17:05:23 pgsql2 patroni[18004]: 2022-09-02 17:05:23,192 ERROR: failed to bootstrap from leader 'pgsql1'
+Sep 02 17:05:23 pgsql2 patroni[18004]: 2022-09-02 17:05:23,192 INFO: Removing data directory: /var/lib/postgresql/14/main
+Sep 02 17:05:28 pgsql2 patroni[18004]: 2022-09-02 17:05:28,151 INFO: Lock owner: pgsql1; I am pgsql2
+Sep 02 17:05:28 pgsql2 patroni[18004]: 2022-09-02 17:05:28,154 INFO: trying to bootstrap from leader 'pgsql1'
+Sep 02 17:05:28 pgsql2 patroni[18032]: pg_basebackup: error: connection to server at "10.129.0.24", port 5432 failed: FATAL:  password authent>
+Sep 02 17:05:28 pgsql2 patroni[18032]: password retrieved from file "/tmp/pgpass0"
+Sep 02 17:05:28 pgsql2 patroni[18004]: 2022-09-02 17:05:28,171 ERROR: Error when fetching backup: pg_basebackup exited with code=1
+Sep 02 17:05:28 pgsql2 patroni[18004]: 2022-09-02 17:05:28,171 WARNING: Trying again in 5 seconds
+Sep 02 17:05:33 pgsql2 patroni[18033]: pg_basebackup: error: connection to server at "10.129.0.24", port 5432 failed: FATAL:  password authent>
+Sep 02 17:05:33 pgsql2 patroni[18033]: password retrieved from file "/tmp/pgpass0"
+Sep 02 17:05:33 pgsql2 patroni[18004]: 2022-09-02 17:05:33,192 ERROR: Error when fetching backup: pg_basebackup exited with code=1
+Sep 02 17:05:33 pgsql2 patroni[18004]: 2022-09-02 17:05:33,193 ERROR: failed to bootstrap from leader 'pgsql1'
+Sep 02 17:05:33 pgsql2 patroni[18004]: 2022-09-02 17:05:33,193 INFO: Removing data directory: /var/lib/postgresql/14/main
+Sep 02 17:05:38 pgsql2 patroni[18004]: 2022-09-02 17:05:38,150 INFO: Lock owner: pgsql1; I am pgsql2
+Sep 02 17:05:38 pgsql2 patroni[18004]: 2022-09-02 17:05:38,153 INFO: trying to bootstrap from leader 'pgsql1'
+Sep 02 17:05:38 pgsql2 patroni[18035]: pg_basebackup: error: connection to server at "10.129.0.24", port 5432 failed: FATAL:  password authent>
+Sep 02 17:05:38 pgsql2 patroni[18035]: password retrieved from file "/tmp/pgpass0"
+Sep 02 17:05:38 pgsql2 patroni[18004]: 2022-09-02 17:05:38,170 ERROR: Error when fetching backup: pg_basebackup exited with code=1
+Sep 02 17:05:38 pgsql2 patroni[18004]: 2022-09-02 17:05:38,170 WARNING: Trying again in 5 seconds
+
+
+
+#----ВМ 
+ru-central1-b
+10.129.0.21
+158.160.11.168
+etcd1
+
+ru-central1-b
+10.129.0.16
+158.160.7.88
+etcd2
+
+ru-central1-b
+10.129.0.3
+158.160.6.46
+etcd3
+
+ru-central1-b
+10.129.0.24
+51.250.27.185
+pgsql1
+
+ru-central1-b
+10.129.0.19
+51.250.96.23
+pgsql2
+
+ru-central1-b
+10.129.0.15
+84.252.138.198
+pgsql3
