@@ -791,3 +791,64 @@ house@pgsql3:~$ sudo -u postgres patroni /etc/patroni.yml
 2022-09-05 18:18:13,033 INFO: Lock owner: pgsql1; I am pgsql3
 2022-09-05 18:18:13,037 INFO: trying to bootstrap from leader 'pgsql1'
 could not change directory to "/home/house": Permission denied
+
+
+--------------------------------------------------------------------------------------------------------------------------
+
+#----Перешел в дирректорию, ошибка ушла при подключении: could not change directory to "/home/house": Permission denied
+
+house@pgsql1:~$ cd ~postgres/
+house@pgsql1:/var/lib/postgresql$ sudo -u postgres psql
+psql: error: connection to server on socket "/var/run/postgresql/.s.PGSQL.5432" failed: No such file or directory
+        Is the server running locally and accepting connections on that socket?
+house@pgsql1:/var/lib/postgresql$ sudo -u postgres  psql -h localhost
+psql (14.5 (Ubuntu 14.5-1.pgdg22.04+1))
+Type "help" for help.
+
+postgres=# create user replicator with password 'rep-pass_321';
+CREATE ROLE
+postgres=# \du
+                                    List of roles
+ Role name  |                         Attributes                         | Member of
+------------+------------------------------------------------------------+-----------
+ postgres   | Superuser, Create role, Create DB, Replication, Bypass RLS | {}
+ replicator |                                                            | {}
+
+postgres=#
+
+
+#----Выдал роль Superuser для replicator
+
+postgres=# ALTER USER replicator WITH SUPERUSER;
+ALTER ROLE
+postgres=# \du
+                                    List of roles
+ Role name  |                         Attributes                         | Member of
+------------+------------------------------------------------------------+-----------
+ postgres   | Superuser, Create role, Create DB, Replication, Bypass RLS | {}
+ replicator | Superuser                                                  | {}
+
+postgres=#
+
+
+#----Проверил на 2ой ноде - запустилось
+
+house@pgsql2:~$ sudo patronictl -c /etc/patroni.yml list
++--------+-------------+---------+---------+----+-----------+
+| Member | Host        | Role    | State   | TL | Lag in MB |
++ Cluster: patroni3 (7139975840175035628) -+----+-----------+
+| pgsql1 | 10.129.0.23 | Leader  | running |  2 |           |
+| pgsql2 | 10.129.0.35 | Replica | running |  2 |         0 |
++--------+-------------+---------+---------+----+-----------+
+
+
+#----Проверил на 3ой ноде - запустилось
+house@pgsql3:~$ sudo patronictl -c /etc/patroni.yml list
++--------+-------------+---------+---------+----+-----------+
+| Member | Host        | Role    | State   | TL | Lag in MB |
++ Cluster: patroni3 (7139975840175035628) -+----+-----------+
+| pgsql1 | 10.129.0.23 | Leader  | running |  2 |           |
+| pgsql2 | 10.129.0.35 | Replica | running |  2 |         0 |
+| pgsql3 | 10.129.0.11 | Replica | running |  2 |         0 |
++--------+-------------+---------+---------+----+-----------+
+
