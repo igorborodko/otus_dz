@@ -689,3 +689,105 @@ ru-central1-b
 10.129.0.15
 84.252.138.198
 pgsql3
+
+
+--------------------------------------------------------------------------------------------------------------------------
+
+
+#----Создал пользователя:
+
+house@pgsql1:~$ sudo -u postgres  psql -h localhost
+could not change directory to "/home/house": Permission denied
+psql (14.5 (Ubuntu 14.5-1.pgdg22.04+1))
+Type "help" for help.
+
+postgres=# create user replicator with password 'rep-pass_321';
+CREATE ROLE
+postgres=# \du
+                                    List of roles
+ Role name  |                         Attributes                         | Member of
+------------+------------------------------------------------------------+-----------
+ postgres   | Superuser, Create role, Create DB, Replication, Bypass RLS | {}
+ replicator |                                                            | {}
+
+#----выдал права, ушла ошибка ---- could not change directory to "/home/house": Permission denied 
+house@pgsql1:~$ chmod 777 /home/house
+
+house@pgsql1:~$ sudo -u postgres  psql -h localhost
+psql (14.5 (Ubuntu 14.5-1.pgdg22.04+1))
+Type "help" for help.
+
+postgres=#
+
+
+#----На второй ноде запустил бутсрап - ошибка с доступом /home/house": Permission denied
+house@pgsql2:~$ sudo systemctl stop patroni
+
+house@pgsql2:~$ sudo -u postgres patroni /etc/patroni.yml
+2022-09-05 17:34:55,085 INFO: Selected new etcd server http://etcd3.ru-central1.internal:2379
+2022-09-05 17:34:55,090 INFO: No PostgreSQL configuration items changed, nothing to reload.
+2022-09-05 17:34:55,093 INFO: Lock owner: pgsql1; I am pgsql2
+2022-09-05 17:34:55,099 INFO: trying to bootstrap from leader 'pgsql1'
+could not change directory to "/home/house": Permission denied
+pg_basebackup: error: connection to server at "10.129.0.24", port 5432 failed: FATAL:  must be superuser or replication role to start walsender
+2022-09-05 17:34:55,119 ERROR: Error when fetching backup: pg_basebackup exited with code=1
+2022-09-05 17:34:55,120 WARNING: Trying again in 5 seconds
+
+
+#----выдал права
+house@pgsql2:~$ chmod 777 /home/house
+
+
+house@pgsql2:~$ sudo systemctl start patroni
+house@pgsql2:~$ sudo patronictl -c /etc/patroni.yml list
++--------+-------------+---------+---------+----+-----------+
+| Member | Host        | Role    | State   | TL | Lag in MB |
++ Cluster: patroni2 (7138791844683556511) -+----+-----------+
+| pgsql1 | 10.129.0.24 | Leader  | running |  6 |           |
+| pgsql2 | 10.129.0.19 | Replica | stopped |    |   unknown |
+| pgsql3 | 10.129.0.15 | Replica | stopped |    |   unknown |
++--------+-------------+---------+---------+----+-----------+
+
+
+house@pgsql2:~$ sudo systemctl stop patroni
+
+
+#---- просит суперпользователь или роль репликации
+house@pgsql2:~$ sudo -u postgres patroni /etc/patroni.yml
+2022-09-05 17:37:31,899 INFO: Selected new etcd server http://etcd1.ru-central1.internal:2379
+2022-09-05 17:37:31,905 INFO: No PostgreSQL configuration items changed, nothing to reload.
+2022-09-05 17:37:31,908 INFO: Lock owner: pgsql1; I am pgsql2
+2022-09-05 17:37:31,913 INFO: trying to bootstrap from leader 'pgsql1'
+pg_basebackup: error: connection to server at "10.129.0.24", port 5432 failed: FATAL:  must be superuser or replication role to start walsender
+2022-09-05 17:37:31,930 ERROR: Error when fetching backup: pg_basebackup exited with code=1
+2022-09-05 17:37:31,930 WARNING: Trying again in 5 seconds
+pg_basebackup: error: connection to server at "10.129.0.24", port 5432 failed: FATAL:  must be superuser or replication role to start walsender
+2022-09-05 17:37:36,952 ERROR: Error when fetching backup: pg_basebackup exited with code=1
+
+
+
+#---- Решил перезагрузить ноды - из-за выдачи прав, похоже изменился authorized_keys  потерял доступ к 1 и 2 ноде
+
+house@Igor:/mnt/c/Users/house$ ssh house@84.201.165.237
+house@84.201.165.237: Permission denied (publickey).
+
+
+#----Остался доступ только к 3ей, манипуляции выше не помогли.
+
+house@pgsql3:~$ sudo patronictl -c /etc/patroni.yml list
++--------+-------------+---------+---------+----+-----------+
+| Member | Host        | Role    | State   | TL | Lag in MB |
++ Cluster: patroni2 (7138791844683556511) -+----+-----------+
+| pgsql1 | 10.129.0.24 | Leader  | running |  8 |           |
+| pgsql2 | 10.129.0.19 | Replica | stopped |    |   unknown |
+| pgsql3 | 10.129.0.15 | Replica | stopped |    |   unknown |
++--------+-------------+---------+---------+----+-----------+
+
+#----Остановил, бутсрап - /home/house": Permission denied
+house@pgsql3:~$ sudo systemctl stop patroni
+house@pgsql3:~$ sudo -u postgres patroni /etc/patroni.yml
+2022-09-05 18:18:13,024 INFO: Selected new etcd server http://etcd2.ru-central1.internal:2379
+2022-09-05 18:18:13,030 INFO: No PostgreSQL configuration items changed, nothing to reload.
+2022-09-05 18:18:13,033 INFO: Lock owner: pgsql1; I am pgsql3
+2022-09-05 18:18:13,037 INFO: trying to bootstrap from leader 'pgsql1'
+could not change directory to "/home/house": Permission denied
