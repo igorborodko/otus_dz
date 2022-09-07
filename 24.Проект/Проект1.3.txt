@@ -1040,3 +1040,299 @@ postgres=# \l
 (4 rows)
 
 postgres=#
+
+
+
+
+
+
+
+
+------------------------------------------------------------------------------------------------------------------------------
+
+
+postgres=# ALTER USER replicator WITH REPLICATION;
+ALTER ROLE
+postgres=# \du
+                                    List of roles
+ Role name  |                         Attributes                         | Member of
+------------+------------------------------------------------------------+-----------
+ admindb    |                                                            | {}
+ postgres   | Superuser, Create role, Create DB, Replication, Bypass RLS | {}
+ replicator | Superuser, Replication                                     | {}
+
+
+
+
+
+create user admin with password 'admin_321';
+
+
+postgres=# create user admin with password 'admin_321';
+CREATE ROLE
+postgres=# ALTER USER admin WITH createrole;
+ALTER ROLE
+postgres=# ALTER USER admin WITH createdb;
+ALTER ROLE
+postgres=# create user rewind_user with password 'rewind_password_321';
+CREATE ROLE
+postgres=# \du
+                                    List of roles
+  Role name  |                         Attributes                         | Member of
+-------------+------------------------------------------------------------+-----------
+ admin       | Create role, Create DB                                     | {}
+ admindb     |                                                            | {}
+ postgres    | Superuser, Create role, Create DB, Replication, Bypass RLS | {}
+ replicator  | Superuser, Replication                                     | {}
+ rewind_user |                                                            | {}
+
+
+#----От пользователя house доступ не получил, только от рута.
+
+root@pgsql3:/var/lib/postgresql/14/main# cat pg_hba.conf
+-------------+---------------------------------------------------------
+# TYPE  DATABASE        USER            ADDRESS                 METHOD
+
+# "local" is for Unix domain socket connections only
+local   all             all                                     trust
+# IPv4 local connections:
+host    all             all             127.0.0.1/32            trust
+# IPv6 local connections:
+host    all             all             ::1/128                 trust
+# Allow replication connections from localhost, by a user with the
+# replication privilege.
+local   replication     all                                     trust
+host    replication     all             127.0.0.1/32            trust
+host    replication     all             ::1/128                 trust
+
+host replication replicator 10.0.0.0/8 md5
+host all all 10.0.0.0/8 md5
+root@pgsql3:/var/lib/postgresql/14/main#
+-------------+---------------------------------------------------------
+
+
+#---- Останавливаю патрони на 3х нодах и бустрапою
+
+root@pgsql3:~# sudo systemctl stop patroni
+root@pgsql3:~# sudo patronictl -c /etc/patroni.yml list
++--------+-------------+---------+---------+----+-----------+
+| Member | Host        | Role    | State   | TL | Lag in MB |
++ Cluster: patroni3 (7139975840175035628) -+----+-----------+
+| pgsql1 | 10.129.0.23 | Replica | stopped |    |   unknown |
+| pgsql2 | 10.129.0.35 | Replica | stopped |    |   unknown |
+| pgsql3 | 10.129.0.11 | Replica | stopped |    |   unknown |
++--------+-------------+---------+---------+----+-----------+
+
+root@pgsql3:~# sudo -u postgres patroni /etc/patroni.yml
+2022-09-07 13:53:04,320 INFO: Selected new etcd server http://etcd2.ru-central1.internal:2379
+2022-09-07 13:53:04,325 INFO: No PostgreSQL configuration items changed, nothing to reload.
+could not change directory to "/root": Permission denied
+could not change directory to "/root": Permission denied
+2022-09-07 13:53:04,334 WARNING: Postgresql is not running.
+could not change directory to "/root": Permission denied
+2022-09-07 13:53:04,334 INFO: Lock owner: None; I am pgsql3
+2022-09-07 13:53:04,336 INFO: pg_controldata:
+  pg_control version number: 1300
+  Catalog version number: 202107181
+  Database system identifier: 7139975840175035628
+  Database cluster state: shut down
+  pg_control last modified: Wed Sep  7 13:52:09 2022
+  Latest checkpoint location: 0/6006600
+  Latest checkpoint's REDO location: 0/6006600
+  Latest checkpoint's REDO WAL file: 0000000B0000000000000006
+  Latest checkpoint's TimeLineID: 11
+  Latest checkpoint's PrevTimeLineID: 11
+  Latest checkpoint's full_page_writes: on
+  Latest checkpoint's NextXID: 0:743
+  Latest checkpoint's NextOID: 24580
+  Latest checkpoint's NextMultiXactId: 1
+  Latest checkpoint's NextMultiOffset: 0
+  Latest checkpoint's oldestXID: 727
+  Latest checkpoint's oldestXID's DB: 1
+  Latest checkpoint's oldestActiveXID: 0
+  Latest checkpoint's oldestMultiXid: 1
+  Latest checkpoint's oldestMulti's DB: 1
+  Latest checkpoint's oldestCommitTsXid: 0
+  Latest checkpoint's newestCommitTsXid: 0
+  Time of latest checkpoint: Wed Sep  7 13:52:09 2022
+  Fake LSN counter for unlogged rels: 0/3E8
+  Minimum recovery ending location: 0/0
+  Min recovery ending loc's timeline: 0
+  Backup start location: 0/0
+  Backup end location: 0/0
+  End-of-backup record required: no
+  wal_level setting: replica
+  wal_log_hints setting: on
+  max_connections setting: 100
+  max_worker_processes setting: 8
+  max_wal_senders setting: 10
+  max_prepared_xacts setting: 0
+  max_locks_per_xact setting: 64
+  track_commit_timestamp setting: off
+  Maximum data alignment: 8
+  Database block size: 8192
+  Blocks per segment of large relation: 131072
+  WAL block size: 8192
+  Bytes per WAL segment: 16777216
+  Maximum length of identifiers: 64
+  Maximum columns in an index: 32
+  Maximum size of a TOAST chunk: 1996
+  Size of a large-object chunk: 2048
+  Date/time type storage: 64-bit integers
+  Float8 argument passing: by value
+  Data page checksum version: 1
+  Mock authentication nonce: 70bf07cd3737798d1ee5de903ee8d320f099c0d837509f75413ec2e22cba1c58
+
+could not change directory to "/root": Permission denied
+2022-09-07 13:53:04,341 INFO: Lock owner: None; I am pgsql3
+2022-09-07 13:53:04,345 INFO: starting as a secondary
+could not change directory to "/root": Permission denied
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/usr/lib/python3.10/multiprocessing/spawn.py", line 116, in spawn_main
+    exitcode = _main(fd, parent_sentinel)
+  File "/usr/lib/python3.10/multiprocessing/spawn.py", line 125, in _main
+    prepare(preparation_data)
+  File "/usr/lib/python3.10/multiprocessing/spawn.py", line 225, in prepare
+    os.chdir(data['dir'])
+PermissionError: [Errno 13] Permission denied: '/root'
+2022-09-07 13:53:14,329 INFO: Lock owner: None; I am pgsql3
+2022-09-07 13:53:14,330 INFO: not healthy enough for leader race
+2022-09-07 13:53:14,333 INFO: restarting after failure in progress
+2022-09-07 13:53:24,329 INFO: Lock owner: None; I am pgsql3
+2022-09-07 13:53:24,329 INFO: not healthy enough for leader race
+2022-09-07 13:53:24,333 INFO: restarting after failure in progress
+^C^CException ignored in: <module 'threading' from '/usr/lib/python3.10/threading.py'>
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/threading.py", line 1560, in _shutdown
+    lock.acquire()
+KeyboardInterrupt:
+
+
+#----Безуспешно
+
+root@pgsql3:~# sudo systemctl start patroni
+
+root@pgsql3:~# sudo patronictl -c /etc/patroni.yml list
++--------+-------------+---------+----------+----+-----------+
+| Member | Host        | Role    | State    | TL | Lag in MB |
++ Cluster: patroni3 (7139975840175035628) --+----+-----------+
+| pgsql1 | 10.129.0.23 | Replica | starting |    |   unknown |
+| pgsql2 | 10.129.0.35 | Replica | starting |    |   unknown |
+| pgsql3 | 10.129.0.11 | Leader  | running  | 12 |           |
++--------+-------------+---------+----------+----+-----------+
+
+
+#----Проверил доступность с 1 и 2 ноды
+house@pgsql1:~$ ping pgsql2
+PING pgsql2.ru-central1.internal (10.129.0.35) 56(84) bytes of data.
+64 bytes from pgsql2.ru-central1.internal (10.129.0.35): icmp_seq=1 ttl=63 time=0.802 ms
+64 bytes from pgsql2.ru-central1.internal (10.129.0.35): icmp_seq=2 ttl=63 time=0.320 ms
+64 bytes from pgsql2.ru-central1.internal (10.129.0.35): icmp_seq=3 ttl=63 time=0.325 ms
+^C
+--- pgsql2.ru-central1.internal ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2005ms
+rtt min/avg/max/mdev = 0.320/0.482/0.802/0.226 ms
+house@pgsql1:~$ ping pgsql3
+PING pgsql3.ru-central1.internal (10.129.0.11) 56(84) bytes of data.
+64 bytes from pgsql3.ru-central1.internal (10.129.0.11): icmp_seq=1 ttl=63 time=0.818 ms
+64 bytes from pgsql3.ru-central1.internal (10.129.0.11): icmp_seq=2 ttl=63 time=0.333 ms
+^C
+--- pgsql3.ru-central1.internal ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1001ms
+rtt min/avg/max/mdev = 0.333/0.575/0.818/0.242 ms
+
+
+#---- логи с патрони
+
+#----1 нода 
+root@pgsql1:/home/house# sudo journalctl -eu patroni.service
+Sep 07 13:59:25 pgsql1 patroni[3281]: 2022-09-07 13:59:25,064 INFO: Lock owner: pgsql3; I am pgsql1
+Sep 07 13:59:25 pgsql1 patroni[3281]: 2022-09-07 13:59:25,064 INFO: establishing a new patroni connection to the postgres cluster
+Sep 07 13:59:25 pgsql1 patroni[3486]: 2022-09-07 13:59:25.065 UTC [3486] FATAL:  the database system is starting up
+Sep 07 13:59:25 pgsql1 patroni[3281]: 2022-09-07 13:59:25,917 INFO: establishing a new patroni connection to the postgres cluster
+Sep 07 13:59:25 pgsql1 patroni[3487]: 2022-09-07 13:59:25.919 UTC [3487] FATAL:  the database system is starting up
+Sep 07 13:59:25 pgsql1 patroni[3281]: 2022-09-07 13:59:25,919 WARNING: Retry got exception: 'connection problems'
+Sep 07 13:59:25 pgsql1 patroni[3281]: 2022-09-07 13:59:25,920 WARNING: Failed to determine PostgreSQL state from the connection, f>Sep 07 13:59:25 pgsql1 patroni[3281]: 2022-09-07 13:59:25,925 INFO: no action. I am (pgsql1), a secondary, and following a leader >Sep 07 13:59:35 pgsql1 patroni[3491]: 2022-09-07 13:59:35.062 UTC [3491] FATAL:  the database system is starting up
+Sep 07 13:59:35 pgsql1 patroni[3490]: localhost:5432 - rejecting connections
+Sep 07 13:59:35 pgsql1 patroni[3281]: 2022-09-07 13:59:35,063 INFO: Lock owner: pgsql3; I am pgsql1
+Sep 07 13:59:35 pgsql1 patroni[3281]: 2022-09-07 13:59:35,063 INFO: Still starting up as a standby.
+Sep 07 13:59:35 pgsql1 patroni[3281]: 2022-09-07 13:59:35,064 INFO: Lock owner: pgsql3; I am pgsql1
+Sep 07 13:59:35 pgsql1 patroni[3281]: 2022-09-07 13:59:35,064 INFO: establishing a new patroni connection to the postgres cluster
+Sep 07 13:59:35 pgsql1 patroni[3492]: 2022-09-07 13:59:35.066 UTC [3492] FATAL:  the database system is starting up
+Sep 07 13:59:35 pgsql1 patroni[3281]: 2022-09-07 13:59:35,587 INFO: establishing a new patroni connection to the postgres cluster
+Sep 07 13:59:35 pgsql1 patroni[3493]: 2022-09-07 13:59:35.589 UTC [3493] FATAL:  the database system is starting up
+Sep 07 13:59:35 pgsql1 patroni[3281]: 2022-09-07 13:59:35,589 WARNING: Retry got exception: 'connection problems'
+Sep 07 13:59:35 pgsql1 patroni[3281]: 2022-09-07 13:59:35,589 WARNING: Failed to determine PostgreSQL state from the connection, f>Sep 07 13:59:35 pgsql1 patroni[3281]: 2022-09-07 13:59:35,593 INFO: no action. I am (pgsql1), a secondary, and following a leader >Sep 07 13:59:45 pgsql1 patroni[3498]: 2022-09-07 13:59:45.062 UTC [3498] FATAL:  the database system is starting up
+Sep 07 13:59:45 pgsql1 patroni[3497]: localhost:5432 - rejecting connections
+Sep 07 13:59:45 pgsql1 patroni[3281]: 2022-09-07 13:59:45,064 INFO: Lock owner: pgsql3; I am pgsql1
+Sep 07 13:59:45 pgsql1 patroni[3281]: 2022-09-07 13:59:45,064 INFO: Still starting up as a standby.
+Sep 07 13:59:45 pgsql1 patroni[3281]: 2022-09-07 13:59:45,064 INFO: Lock owner: pgsql3; I am pgsql1
+Sep 07 13:59:45 pgsql1 patroni[3281]: 2022-09-07 13:59:45,064 INFO: establishing a new patroni connection to the postgres cluster
+Sep 07 13:59:45 pgsql1 patroni[3499]: 2022-09-07 13:59:45.066 UTC [3499] FATAL:  the database system is starting up
+Sep 07 13:59:45 pgsql1 patroni[3281]: 2022-09-07 13:59:45,927 INFO: establishing a new patroni connection to the postgres cluster
+Sep 07 13:59:45 pgsql1 patroni[3500]: 2022-09-07 13:59:45.929 UTC [3500] FATAL:  the database system is starting up
+Sep 07 13:59:45 pgsql1 patroni[3281]: 2022-09-07 13:59:45,929 WARNING: Retry got exception: 'connection problems'
+Sep 07 13:59:45 pgsql1 patroni[3281]: 2022-09-07 13:59:45,929 WARNING: Failed to determine PostgreSQL state from the connection, f>Sep 07 13:59:45 pgsql1 patroni[3281]: 2022-09-07 13:59:45,934 INFO: no action. I am (pgsql1), a secondary, and following a leader 
+
+#----2 нода 
+house@pgsql2:~$ sudo journalctl -eu patroni.service
+Sep 07 13:59:05 pgsql2 patroni[3729]: 2022-09-07 13:59:05,845 INFO: no action. I am (pgsql2), a secondary, and following a leader >Sep 07 13:59:15 pgsql2 patroni[4000]: 2022-09-07 13:59:15.062 UTC [4000] FATAL:  the database system is starting up
+Sep 07 13:59:15 pgsql2 patroni[3999]: localhost:5432 - rejecting connections
+Sep 07 13:59:15 pgsql2 patroni[3729]: 2022-09-07 13:59:15,064 INFO: Lock owner: pgsql3; I am pgsql2
+Sep 07 13:59:15 pgsql2 patroni[3729]: 2022-09-07 13:59:15,064 INFO: Still starting up as a standby.
+Sep 07 13:59:15 pgsql2 patroni[3729]: 2022-09-07 13:59:15,065 INFO: Lock owner: pgsql3; I am pgsql2
+Sep 07 13:59:15 pgsql2 patroni[3729]: 2022-09-07 13:59:15,065 INFO: establishing a new patroni connection to the postgres cluster
+Sep 07 13:59:15 pgsql2 patroni[4001]: 2022-09-07 13:59:15.066 UTC [4001] FATAL:  the database system is starting up
+Sep 07 13:59:15 pgsql2 patroni[3729]: 2022-09-07 13:59:15,787 INFO: establishing a new patroni connection to the postgres cluster
+Sep 07 13:59:15 pgsql2 patroni[4002]: 2022-09-07 13:59:15.789 UTC [4002] FATAL:  the database system is starting up
+Sep 07 13:59:15 pgsql2 patroni[3729]: 2022-09-07 13:59:15,790 WARNING: Retry got exception: 'connection problems'
+Sep 07 13:59:15 pgsql2 patroni[3729]: 2022-09-07 13:59:15,790 WARNING: Failed to determine PostgreSQL state from the connection, f>Sep 07 13:59:15 pgsql2 patroni[3729]: 2022-09-07 13:59:15,797 INFO: no action. I am (pgsql2), a secondary, and following a leader >Sep 07 13:59:25 pgsql2 patroni[4006]: 2022-09-07 13:59:25.062 UTC [4006] FATAL:  the database system is starting up
+Sep 07 13:59:25 pgsql2 patroni[4005]: localhost:5432 - rejecting connections
+Sep 07 13:59:25 pgsql2 patroni[3729]: 2022-09-07 13:59:25,064 INFO: Lock owner: pgsql3; I am pgsql2
+Sep 07 13:59:25 pgsql2 patroni[3729]: 2022-09-07 13:59:25,064 INFO: Still starting up as a standby.
+Sep 07 13:59:25 pgsql2 patroni[3729]: 2022-09-07 13:59:25,065 INFO: Lock owner: pgsql3; I am pgsql2
+Sep 07 13:59:25 pgsql2 patroni[3729]: 2022-09-07 13:59:25,065 INFO: establishing a new patroni connection to the postgres cluster
+Sep 07 13:59:25 pgsql2 patroni[4007]: 2022-09-07 13:59:25.066 UTC [4007] FATAL:  the database system is starting up
+Sep 07 13:59:25 pgsql2 patroni[3729]: 2022-09-07 13:59:25,287 INFO: establishing a new patroni connection to the postgres cluster
+Sep 07 13:59:25 pgsql2 patroni[4008]: 2022-09-07 13:59:25.289 UTC [4008] FATAL:  the database system is starting up
+Sep 07 13:59:25 pgsql2 patroni[3729]: 2022-09-07 13:59:25,289 WARNING: Retry got exception: 'connection problems'
+Sep 07 13:59:25 pgsql2 patroni[3729]: 2022-09-07 13:59:25,290 WARNING: Failed to determine PostgreSQL state from the connection, f>Sep 07 13:59:25 pgsql2 patroni[3729]: 2022-09-07 13:59:25,297 INFO: no action. I am (pgsql2), a secondary, and following a leader >Sep 07 13:59:35 pgsql2 patroni[4012]: 2022-09-07 13:59:35.063 UTC [4012] FATAL:  the database system is starting up
+Sep 07 13:59:35 pgsql2 patroni[4011]: localhost:5432 - rejecting connections
+Sep 07 13:59:35 pgsql2 patroni[3729]: 2022-09-07 13:59:35,064 INFO: Lock owner: pgsql3; I am pgsql2
+Sep 07 13:59:35 pgsql2 patroni[3729]: 2022-09-07 13:59:35,064 INFO: Still starting up as a standby.
+Sep 07 13:59:35 pgsql2 patroni[3729]: 2022-09-07 13:59:35,065 INFO: Lock owner: pgsql3; I am pgsql2
+Sep 07 13:59:35 pgsql2 patroni[3729]: 2022-09-07 13:59:35,065 INFO: establishing a new patroni connection to the postgres cluster
+Sep 07 13:59:35 pgsql2 patroni[4013]: 2022-09-07 13:59:35.066 UTC [4013] FATAL:  the database system is starting up
+
+
+#----3 нода 
+root@pgsql3:~# sudo journalctl -eu patroni.service
+Sep 07 13:54:45 pgsql3 patroni[1859]: 2022-09-07 13:54:45,134 INFO: no action. I am (pgsql3), the leader with the lock
+Sep 07 13:54:55 pgsql3 patroni[1859]: 2022-09-07 13:54:55,051 INFO: no action. I am (pgsql3), the leader with the lock
+Sep 07 13:55:05 pgsql3 patroni[1859]: 2022-09-07 13:55:05,051 INFO: no action. I am (pgsql3), the leader with the lock
+Sep 07 13:55:11 pgsql3 patroni[1906]: 2022-09-07 13:55:11.219 UTC [1906] LOG:  could not send data to client: Connection reset by >Sep 07 13:55:11 pgsql3 patroni[1906]: 2022-09-07 13:55:11.219 UTC [1906] STATEMENT:  START_REPLICATION SLOT "pgsql2" 0/5000000 TIM>Sep 07 13:55:15 pgsql3 patroni[1859]: 2022-09-07 13:55:15,052 INFO: no action. I am (pgsql3), the leader with the lock
+Sep 07 13:55:25 pgsql3 patroni[1859]: 2022-09-07 13:55:25,050 INFO: no action. I am (pgsql3), the leader with the lock
+Sep 07 13:55:35 pgsql3 patroni[1859]: 2022-09-07 13:55:35,098 INFO: no action. I am (pgsql3), the leader with the lock
+Sep 07 13:55:45 pgsql3 patroni[1859]: 2022-09-07 13:55:45,049 INFO: no action. I am (pgsql3), the leader with the lock
+Sep 07 13:55:55 pgsql3 patroni[1859]: 2022-09-07 13:55:55,048 INFO: no action. I am (pgsql3), the leader with the lock
+Sep 07 13:56:05 pgsql3 patroni[1859]: 2022-09-07 13:56:05,051 INFO: no action. I am (pgsql3), the leader with the lock
+Sep 07 13:56:15 pgsql3 patroni[1859]: 2022-09-07 13:56:15,053 INFO: no action. I am (pgsql3), the leader with the lock
+Sep 07 13:56:25 pgsql3 patroni[1859]: 2022-09-07 13:56:25,051 INFO: no action. I am (pgsql3), the leader with the lock
+Sep 07 13:56:35 pgsql3 patroni[1859]: 2022-09-07 13:56:35,052 INFO: no action. I am (pgsql3), the leader with the lock
+Sep 07 13:56:45 pgsql3 patroni[1859]: 2022-09-07 13:56:45,051 INFO: no action. I am (pgsql3), the leader with the lock
+Sep 07 13:56:55 pgsql3 patroni[1859]: 2022-09-07 13:56:55,048 INFO: no action. I am (pgsql3), the leader with the lock
+Sep 07 13:57:05 pgsql3 patroni[1859]: 2022-09-07 13:57:05,048 INFO: no action. I am (pgsql3), the leader with the lock
+Sep 07 13:57:14 pgsql3 patroni[1915]: 2022-09-07 13:57:14.853 UTC [1915] LOG:  could not send data to client: Connection reset by >Sep 07 13:57:14 pgsql3 patroni[1915]: 2022-09-07 13:57:14.853 UTC [1915] STATEMENT:  START_REPLICATION SLOT "pgsql1" 0/5000000 TIM>Sep 07 13:57:15 pgsql3 patroni[1859]: 2022-09-07 13:57:15,054 INFO: no action. I am (pgsql3), the leader with the lock
+Sep 07 13:57:25 pgsql3 patroni[1859]: 2022-09-07 13:57:25,048 INFO: no action. I am (pgsql3), the leader with the lock
+Sep 07 13:57:35 pgsql3 patroni[1859]: 2022-09-07 13:57:35,051 INFO: no action. I am (pgsql3), the leader with the lock
+Sep 07 13:57:45 pgsql3 patroni[1859]: 2022-09-07 13:57:45,054 INFO: no action. I am (pgsql3), the leader with the lock
+Sep 07 13:57:55 pgsql3 patroni[1859]: 2022-09-07 13:57:55,049 INFO: no action. I am (pgsql3), the leader with the lock
+Sep 07 13:58:05 pgsql3 patroni[1859]: 2022-09-07 13:58:05,047 INFO: no action. I am (pgsql3), the leader with the lock
+Sep 07 13:58:15 pgsql3 patroni[1859]: 2022-09-07 13:58:15,049 INFO: no action. I am (pgsql3), the leader with the lock
+Sep 07 13:58:25 pgsql3 patroni[1859]: 2022-09-07 13:58:25,051 INFO: no action. I am (pgsql3), the leader with the lock
+Sep 07 13:58:35 pgsql3 patroni[1859]: 2022-09-07 13:58:35,049 INFO: no action. I am (pgsql3), the leader with the lock
+Sep 07 13:58:45 pgsql3 patroni[1859]: 2022-09-07 13:58:45,055 INFO: no action. I am (pgsql3), the leader with the lock
+Sep 07 13:58:55 pgsql3 patroni[1859]: 2022-09-07 13:58:55,052 INFO: no action. I am (pgsql3), the leader with the lock
+Sep 07 13:59:05 pgsql3 patroni[1859]: 2022-09-07 13:59:05,050 INFO: no action. I am (pgsql3), the leader with the lock
+Sep 07 13:59:15 pgsql3 patroni[1859]: 2022-09-07 13:59:15,049 INFO: no action. I am (pgsql3), the leader with the lock
