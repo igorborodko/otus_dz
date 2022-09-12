@@ -1336,3 +1336,239 @@ Sep 07 13:58:45 pgsql3 patroni[1859]: 2022-09-07 13:58:45,055 INFO: no action. I
 Sep 07 13:58:55 pgsql3 patroni[1859]: 2022-09-07 13:58:55,052 INFO: no action. I am (pgsql3), the leader with the lock
 Sep 07 13:59:05 pgsql3 patroni[1859]: 2022-09-07 13:59:05,050 INFO: no action. I am (pgsql3), the leader with the lock
 Sep 07 13:59:15 pgsql3 patroni[1859]: 2022-09-07 13:59:15,049 INFO: no action. I am (pgsql3), the leader with the lock
+
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+#----Для решения данной проблемы: стопаем сервисы постгре и патрони
+systemctl stop patroni
+systemctl stop postgresql
+
+
+#----Удаляем каталог /var/lib/postgresql/14
+cd /var/lib/postgresql
+rm -rf 14
+
+#----бутстрапим патрони
+
+root@pgsql1:/home/house# patronictl -c /etc/patroni.yml list
++--------+-------------+---------+---------+----+-----------+
+| Member | Host        | Role    | State   | TL | Lag in MB |
++ Cluster: patroni3 (7139975840175035628) -+----+-----------+
+| pgsql1 | 10.129.0.23 | Leader  | running | 18 |           |
+| pgsql2 | 10.129.0.35 | Replica | running | 18 |         0 |
+| pgsql3 | 10.129.0.11 | Replica | running | 18 |         0 |
++--------+-------------+---------+---------+----+-----------+
+
+
+#----Подключился к pgbouncer
+root@pgsql1:/home/house# sudo -u postgres psql -p 6432 pgbouncer -h localhost
+could not change directory to "/home/house": Permission denied
+Password for user postgres:
+psql (14.5 (Ubuntu 14.5-1.pgdg22.04+1), server 1.17.0/bouncer)
+Type "help" for help.
+
+pgbouncer=# show clients;
+
+ type |   user   | database  | state  | addr | port  | local_addr | local_port |      connect_time       |      request_time       | wait | wait_us | close_needed |      ptr       | link | remote_pid | tls
+------+----------+-----------+--------+------+-------+------------+------------+-------------------------+-------------------------+------+---------+--------------+----------------+------+------------+-----
+ C    | postgres | pgbouncer | active | ::1  | 36364 | ::1        |       6432 | 2022-09-12 09:51:06 UTC | 2022-09-12 09:51:58 UTC |   22 |  245429 |            0 | 0x561bbc39ce00 |      |          0 |
+(1 row)
+
+
+#----Нагрузил базу локально
+root@pgsql1:/home/house# sudo -u postgres pgbench -p 6432 -i -d otus -h localhost
+Password:
+dropping old tables...
+NOTICE:  table "pgbench_accounts" does not exist, skipping
+NOTICE:  table "pgbench_branches" does not exist, skipping
+NOTICE:  table "pgbench_history" does not exist, skipping
+NOTICE:  table "pgbench_tellers" does not exist, skipping
+creating tables...
+generating data (client-side)...
+100000 of 100000 tuples (100%) done (elapsed 0.03 s, remaining 0.00 s)
+vacuuming...
+creating primary keys...
+done in 1.10 s (drop tables 0.01 s, create tables 0.06 s, client-side generate 0.64 s, vacuum 0.09 s, primary keys 0.30 s).
+Type "help" for help.
+
+#----Проверил статисктику
+pgbouncer=# SHOW STATS_TOTALS;
+ database  | xact_count | query_count | bytes_received | bytes_sent | xact_time | query_time | wait_time
+-----------+------------+-------------+----------------+------------+-----------+------------+-----------
+ otus      |         17 |          31 |        1590793 |       2170 |   1112172 |    1111522 |     43271
+ pgbouncer |          5 |           5 |              0 |          0 |         0 |          0 |         0
+(2 rows)
+
+
+
+#----Нагрузил с  2ой ноды 
+root@pgsql2:/home/house# sudo -u postgres pgbench -p 6432 -i -d otus -h 10.129.0.23
+Password:
+dropping old tables...
+creating tables...
+generating data (client-side)...
+100000 of 100000 tuples (100%) done (elapsed 0.02 s, remaining 0.00 s)
+vacuuming...
+creating primary keys...
+done in 2.02 s (drop tables 0.01 s, create tables 0.02 s, client-side generate 1.67 s, vacuum 0.06 s, primary keys 0.25 s).
+
+
+#----Проверил - статистика увеличилась.
+pgbouncer=# SHOW STATS_TOTALS;
+ database  | xact_count | query_count | bytes_received | bytes_sent | xact_time | query_time | wait_time
+-----------+------------+-------------+----------------+------------+-----------+------------+-----------
+ otus      |         43 |          85 |        4772035 |       3686 |   4083100 |    4079193 |     43781
+ pgbouncer |          6 |           6 |              0 |          0 |         0 |          0 |         0
+(2 rows)
+
+
+ type |   user   | database | state |   addr    | port | local_addr | local_port |      connect_time       |      request_time       | wait | wait_us | close_needed |      ptr       | link | remote_pid | tls
+------+----------+----------+-------+-----------+------+------------+------------+-------------------------+-------------------------+------+---------+--------------+----------------+------+------------+-----
+ S    | postgres | otus     | used  | 127.0.0.1 | 5432 | 127.0.0.1  |      36534 | 2022-09-12 11:20:47 UTC | 2022-09-12 11:26:54 UTC |    0 |       0 |            0 | 0x561bbc3a9660 |      |       1741 |
+(1 row)
+
+
+
+#---- развернем 2 ВМ для HAProxy
+sudo apt install -y --no-install-recommends software-properties-common && sudo add-apt-repository -y ppa:vbernat/haproxy-2.5 && sudo apt install -y haproxy=2.5.\*
+
+
+
+#----Проверим ответ мастера
+curl -v 10.129.0.23:8008/master
+
+house@proxy1:~$ curl -v 10.129.0.23:8008/master
+*   Trying 10.129.0.23:8008...
+* Connected to 10.129.0.23 (10.129.0.23) port 8008 (#0)
+> GET /master HTTP/1.1
+> Host: 10.129.0.23:8008
+> User-Agent: curl/7.81.0
+> Accept: */*
+>
+* Mark bundle as not supporting multiuse
+* HTTP 1.0, assume close after body
+< HTTP/1.0 200 OK
+< Server: BaseHTTP/0.6 Python/3.10.4
+< Date: Mon, 12 Sep 2022 12:35:58 GMT
+< Content-Type: application/json
+<
+* Closing connection 0
+{"state": "running", "postmaster_start_time": "2022-09-12 09:26:12.524834+00:00", "role": "master", "server_version": 140005, "xlog": {"location": 274612880}, "timeline": 19, "replication": [{"usename": "replicator", "application_name": "pgsql3", "client_addr": "10.129.0.11", "state": "streaming", "sync_state": "async", "sync_priority": 0}, {"usename": "replicator", "application_name": "pgsql2", "client_addr": "10.129.0.35", "state": "streaming", "sync_state": "async", "sync_priority": 0}], "dcs_last_seen": 1662986155, "database_system_identifier": "7139975840175035628", "patroni": {"version": "2.1.4", "scope": "patroni3"}}house@proxy1:~$
+
+
+sudo apt update && sudo apt upgrade -y && sudo apt install -y postgresql-client-common && sudo apt install postgresql-client -y
+
+#zalando_321
+
+psql -p 6432 -d otus -h 10.129.0.23 -U postgres
+
+#----Проверим подключение
+house@proxy1:~$ psql -p 6432 -d otus -h 10.129.0.23 -U postgres
+Password for user postgres:
+psql (14.5 (Ubuntu 14.5-0ubuntu0.22.04.1))
+Type "help" for help.
+
+otus=# 
+
+otus=# \l
+                                  List of databases
+   Name    |  Owner   | Encoding |   Collate   |    Ctype    |   Access privileges
+-----------+----------+----------+-------------+-------------+-----------------------
+ otus      | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 |
+ postgres  | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 |
+ template0 | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | =c/postgres          +
+           |          |          |             |             | postgres=CTc/postgres
+ template1 | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | =c/postgres          +
+           |          |          |             |             | postgres=CTc/postgres
+(4 rows)
+
+otus=# create database haproxy;
+CREATE DATABASE
+otus=# \l
+                                  List of databases
+   Name    |  Owner   | Encoding |   Collate   |    Ctype    |   Access privileges
+-----------+----------+----------+-------------+-------------+-----------------------
+ haproxy   | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 |
+ otus      | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 |
+ postgres  | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 |
+ template0 | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | =c/postgres          +
+           |          |          |             |             | postgres=CTc/postgres
+ template1 | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | =c/postgres          +
+           |          |          |             |             | postgres=CTc/postgres
+(5 rows)
+
+
+
+udo nano /etc/haproxy/haproxy.cfg
+listen postgres_write
+    bind *:5432
+    mode            tcp
+    option httpchk
+    http-check connect
+    http-check send meth GET uri /master
+    http-check expect status 200
+    default-server inter 10s fall 3 rise 3 on-marked-down shutdown-sessions
+    server pgsql1 10.129.0.23:6432 check port 8008
+    server pgsql2 10.129.0.35:6432 check port 8008
+    server pgsql3 10.129.0.11:6432 check port 8008
+
+listen postgres_read
+    bind *:5433
+    mode            tcp
+    http-check connect
+    http-check send meth GET uri /replica
+    http-check expect status 200
+    default-server inter 10s fall 3 rise 3 on-marked-down shutdown-sessions
+    server pgsql1 10.129.0.23:6432 check port 8008
+    server pgsql2 10.129.0.35:6432 check port 8008
+    server pgsql3 10.129.0.11:6432 check port 8008
+
+	
+#----	Рестартуем хапрокси
+house@proxy1:~$ sudo systemctl restart haproxy.service
+house@proxy1:~$ sudo systemctl status haproxy.service
+● haproxy.service - HAProxy Load Balancer
+     Loaded: loaded (/lib/systemd/system/haproxy.service; enabled; vendor preset: enabled)
+     Active: active (running) since Mon 2022-09-12 14:30:47 UTC; 23s ago
+       Docs: man:haproxy(1)
+             file:/usr/share/doc/haproxy/configuration.txt.gz
+   Main PID: 24652 (haproxy)
+      Tasks: 3 (limit: 2236)
+     Memory: 38.2M
+        CPU: 58ms
+     CGroup: /system.slice/haproxy.service
+             ├─24652 /usr/sbin/haproxy -x /run/haproxy/admin.sock -Ws -f /etc/haproxy/haproxy.cfg -p /run/haproxy.pid -S /run/hapr>             └─24654 /usr/sbin/haproxy -Ws -f /etc/haproxy/haproxy.cfg -p /run/haproxy.pid -S /run/haproxy-master.sock
+
+Sep 12 14:30:47 proxy1 haproxy[24652]: [WARNING]  (24652) : config : proxy 'postgres_read' uses http-check rules without 'option h>Sep 12 14:30:47 proxy1 haproxy[24652]: [NOTICE]   (24652) : New worker (24654) forked
+Sep 12 14:30:47 proxy1 haproxy[24652]: [NOTICE]   (24652) : Loading success.
+Sep 12 14:30:47 proxy1 systemd[1]: Started HAProxy Load Balancer.
+Sep 12 14:30:48 proxy1 haproxy[24654]: [WARNING]  (24654) : Server postgres_write/pgsql2 is DOWN, reason: Layer7 wrong status, cod>Sep 12 14:30:48 proxy1 haproxy[24654]: Server postgres_write/pgsql2 is DOWN, reason: Layer7 wrong status, code: 503, info: "Servic>Sep 12 14:30:48 proxy1 haproxy[24654]: Server postgres_write/pgsql2 is DOWN, reason: Layer7 wrong status, code: 503, info: "Servic>Sep 12 14:30:50 proxy1 haproxy[24654]: [WARNING]  (24654) : Server postgres_write/pgsql3 is DOWN, reason: Layer7 wrong status, cod>Sep 12 14:30:50 proxy1 haproxy[24654]: Server postgres_write/pgsql3 is DOWN, reason: Layer7 wrong status, code: 503, info: "Servic>Sep 12 14:30:50 proxy1 haproxy[24654]: Server postgres_write/pgsql3 is DOWN, reason: Layer7 wrong status, code: 503, info: "Servic>
+
+
+#---- Логи
+Sep 12 14:30:47 proxy1 haproxy[1924]: [NOTICE]   (1924) : haproxy version is 2.5.8-1ppa1~jammy
+Sep 12 14:30:47 proxy1 haproxy[1924]: [NOTICE]   (1924) : path to executable is /usr/sbin/haproxy
+Sep 12 14:30:47 proxy1 haproxy[1924]: [WARNING]  (1924) : Exiting Master process...
+Sep 12 14:30:47 proxy1 haproxy[1924]: [ALERT]    (1924) : Current worker (1926) exited with code 143 (Terminated)
+Sep 12 14:30:47 proxy1 haproxy[1924]: [WARNING]  (1924) : All workers exited. Exiting... (0)
+Sep 12 14:30:47 proxy1 haproxy[24652]: [NOTICE]   (24652) : haproxy version is 2.5.8-1ppa1~jammy
+Sep 12 14:30:47 proxy1 haproxy[24652]: [NOTICE]   (24652) : path to executable is /usr/sbin/haproxy
+Sep 12 14:30:47 proxy1 haproxy[24652]: [WARNING]  (24652) : config : parsing [/etc/haproxy/haproxy.cfg:23] : 'option httplog' not usable with proxy 'postgres_write' (needs 'mode http'). Falling back to 'option tcplog'.
+Sep 12 14:30:47 proxy1 haproxy[24652]: [WARNING]  (24652) : config : parsing [/etc/haproxy/haproxy.cfg:23] : 'option httplog' not usable with proxy 'postgres_read' (needs 'mode http'). Falling back to 'option tcplog'.
+Sep 12 14:30:47 proxy1 haproxy[24652]: [WARNING]  (24652) : config : proxy 'postgres_read' uses http-check rules without 'option httpchk', so the rules are ignored.
+Sep 12 14:30:47 proxy1 haproxy[24652]: [NOTICE]   (24652) : New worker (24654) forked
+Sep 12 14:30:47 proxy1 haproxy[24652]: [NOTICE]   (24652) : Loading success.
+Sep 12 14:30:48 proxy1 haproxy[24654]: [WARNING]  (24654) : Server postgres_write/pgsql2 is DOWN, reason: Layer7 wrong status, code: 503, info: "Service Unavailable", check duration: 11ms. 2 active and 0 backup servers left. 0 sessions active, 0 requeued, 0 remaining in queue.
+Sep 12 14:30:48 proxy1 haproxy[24654]: Server postgres_write/pgsql2 is DOWN, reason: Layer7 wrong status, code: 503, info: "Service Unavailable", check duration: 11ms. 2 active and 0 backup servers left. 0 sessions active, 0 requeued, 0 remaining in queue.
+Sep 12 14:30:48 proxy1 haproxy[24654]: Server postgres_write/pgsql2 is DOWN, reason: Layer7 wrong status, code: 503, info: "Service Unavailable", check duration: 11ms. 2 active and 0 backup servers left. 0 sessions active, 0 requeued, 0 remaining in queue.
+Sep 12 14:30:50 proxy1 haproxy[24654]: [WARNING]  (24654) : Server postgres_write/pgsql3 is DOWN, reason: Layer7 wrong status, code: 503, info: "Service Unavailable", check duration: 11ms. 1 active and 0 backup servers left. 0 sessions active, 0 requeued, 0 remaining in queue.
+Sep 12 14:30:50 proxy1 haproxy[24654]: Server postgres_write/pgsql3 is DOWN, reason: Layer7 wrong status, code: 503, info: "Service Unavailable", check duration: 11ms. 1 active and 0 backup servers left. 0 sessions active, 0 requeued, 0 remaining in queue.
+Sep 12 14:30:50 proxy1 haproxy[24654]: Server postgres_write/pgsql3 is DOWN, reason: Layer7 wrong status, code: 503, info: "Service Unavailable", check duration: 11ms. 1 active and 0 backup servers left. 0 sessions active, 0 requeued, 0 remaining in queue.      
+
+#----Проверим подключение.
+house@proxy1:~$ psql -h localhost -d otus -U postgres -p 5432
+Password for user postgres:
+psql (14.5 (Ubuntu 14.5-0ubuntu0.22.04.1))
+Type "help" for help.
+
+otus=# \q
