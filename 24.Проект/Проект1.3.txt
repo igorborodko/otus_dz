@@ -1572,3 +1572,62 @@ psql (14.5 (Ubuntu 14.5-0ubuntu0.22.04.1))
 Type "help" for help.
 
 otus=# \q
+
+--------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+#----Переключим мастера
+root@pgsql1:/home/house# sudo patronictl -c /etc/patroni.yml list
++--------+-------------+---------+---------+----+-----------+
+| Member | Host        | Role    | State   | TL | Lag in MB |
++ Cluster: patroni3 (7139975840175035628) -+----+-----------+
+| pgsql1 | 10.129.0.23 | Replica | running | 20 |         0 |
+| pgsql2 | 10.129.0.35 | Replica | running | 20 |         0 |
+| pgsql3 | 10.129.0.11 | Leader  | running | 20 |           |
++--------+-------------+---------+---------+----+-----------+
+root@pgsql1:/home/house# patronictl -c /etc/patroni.yml switchover
+Master [pgsql3]:
+Candidate ['pgsql1', 'pgsql2'] []: pgsql1
+When should the switchover take place (e.g. 2022-09-13T05:40 )  [now]: yes
+Error: Unable to parse scheduled timestamp (yes). It should be in an unambiguous format (e.g. ISO 8601)
+root@pgsql1:/home/house# sudo patronictl -c /etc/patroni.yml list
++--------+-------------+---------+---------+----+-----------+
+| Member | Host        | Role    | State   | TL | Lag in MB |
++ Cluster: patroni3 (7139975840175035628) -+----+-----------+
+| pgsql1 | 10.129.0.23 | Replica | running | 20 |         0 |
+| pgsql2 | 10.129.0.35 | Replica | running | 20 |         0 |
+| pgsql3 | 10.129.0.11 | Leader  | running | 20 |           |
++--------+-------------+---------+---------+----+-----------+
+
+#----Выполнил синхронизацию - установил NTP
+sudo apt install ntp
+
+#----дата неверная была
+root@pgsql1:/home/house# date
+Tue Sep 13 04:59:58 AM UTC 2022
+
+#----сделал симлинк на верный пояс
+root@pgsql1:/home/house# ln -sf /usr/share/zoneinfo/Europe/Moscow /etc/localtime
+
+#----Все ок
+root@pgsql1:/home/house# date
+Tue Sep 13 08:00:54 AM MSK 2022
+
+#----Ошибка таже 
+
+root@pgsql1:/home/house# patronictl -c /etc/patroni.yml switchover
+Master [pgsql3]:
+Candidate ['pgsql1', 'pgsql2'] []: pgsql1
+When should the switchover take place (e.g. 2022-09-13T09:21 )  [now]: yes
+Error: Unable to parse scheduled timestamp (yes). It should be in an unambiguous format (e.g. ISO 8601)
+root@pgsql1:/home/house#
+
+root@pgsql1:/home/house# sudo patronictl -c /etc/patroni.yml list
++--------+-------------+---------+---------+----+-----------+
+| Member | Host        | Role    | State   | TL | Lag in MB |
++ Cluster: patroni3 (7139975840175035628) -+----+-----------+
+| pgsql1 | 10.129.0.23 | Replica | running | 20 |         0 |
+| pgsql2 | 10.129.0.35 | Replica | running | 20 |         0 |
+| pgsql3 | 10.129.0.11 | Leader  | running | 20 |           |
++--------+-------------+---------+---------+----+-----------+
+
