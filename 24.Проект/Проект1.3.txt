@@ -1631,3 +1631,277 @@ root@pgsql1:/home/house# sudo patronictl -c /etc/patroni.yml list
 | pgsql3 | 10.129.0.11 | Leader  | running | 20 |           |
 +--------+-------------+---------+---------+----+-----------+
 
+
+-------------------------------------------------------------------------------------------------------------------------
+
+
+#----Переключим мастера - успех (ошибка: Там просто enter, А не yes)
+
+root@pgsql1:/home/house# patronictl -c /etc/patroni.yml switchover
+Master [pgsql2]:
+Candidate ['pgsql1', 'pgsql3'] []: pgsql1
+When should the switchover take place (e.g. 2022-09-14T07:42 )  [now]:
+Current cluster topology
++--------+-------------+---------+---------+----+-----------+
+| Member | Host        | Role    | State   | TL | Lag in MB |
++ Cluster: patroni3 (7139975840175035628) -+----+-----------+
+| pgsql1 | 10.129.0.23 | Replica | running | 22 |         0 |
+| pgsql2 | 10.129.0.35 | Leader  | running | 22 |           |
+| pgsql3 | 10.129.0.11 | Replica | running | 22 |         0 |
++--------+-------------+---------+---------+----+-----------+
+Are you sure you want to switchover cluster patroni3, demoting current master pgsql2? [y/N]: y
+2022-09-14 06:42:37.37394 Successfully switched over to "pgsql1"
++--------+-------------+---------+---------+----+-----------+
+| Member | Host        | Role    | State   | TL | Lag in MB |
++ Cluster: patroni3 (7139975840175035628) -+----+-----------+
+| pgsql1 | 10.129.0.23 | Leader  | running | 22 |           |
+| pgsql2 | 10.129.0.35 | Replica | stopped |    |   unknown |
+| pgsql3 | 10.129.0.11 | Replica | running | 22 |         0 |
++--------+-------------+---------+---------+----+-----------+
+root@pgsql1:/home/house# patronictl -c /etc/patroni.yml list
++--------+-------------+---------+---------+----+-----------+
+| Member | Host        | Role    | State   | TL | Lag in MB |
++ Cluster: patroni3 (7139975840175035628) -+----+-----------+
+| pgsql1 | 10.129.0.23 | Leader  | running | 23 |           |
+| pgsql2 | 10.129.0.35 | Replica | running | 23 |         0 |
+| pgsql3 | 10.129.0.11 | Replica | running | 23 |         0 |
++--------+-------------+---------+---------+----+-----------+
+
+
+
+#----настроим keepalived на 2ух хостах с HAproxy
+sudo apt install -y keepalived
+
+house@proxy1:~$ sudo nano /etc/sysctl.conf
+house@proxy1:~$ sudo sysctl -p
+net.ipv4.ip_nonlocal_bind = 1
+
+
+#----Проверим адресацию
+
+house@proxy1:~$ ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host
+       valid_lft forever preferred_lft forever
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000
+    link/ether d0:0d:66:3a:92:a0 brd ff:ff:ff:ff:ff:ff
+    altname enp138s0
+    altname ens8
+    inet 10.129.0.34/24 metric 100 brd 10.129.0.255 scope global eth0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::d20d:66ff:fe3a:92a0/64 scope link
+       valid_lft forever preferred_lft forever
+	 
+
+	 
+#----Пропишем конфиг - выбираю виртуальный адрес 10.129.0.24 keepalived.conf
+
+sudo nano /etc/keepalived/keepalived.conf
+
+global_defs {
+# Keepalived process identifier
+lvs_id haproxy_DH
+}
+# Script used to check if HAProxy is running
+vrrp_script check_haproxy {
+script "killall -0 haproxy"
+interval 2
+weight 2
+}
+# Virtual interface
+# The priority specifies the order in which the assigned interface to take over in a failover
+vrrp_instance VI_01 {
+state MASTER
+interface ens4
+virtual_router_id 51
+priority 101
+# The virtual ip address shared between the two loadbalancers
+virtual_ipaddress {
+10.129.0.24
+}
+track_script {
+check_haproxy
+}
+}
+
+sudo nano /etc/keepalived/keepalived.conf
+
+global_defs {
+# Keepalived process identifier
+lvs_id haproxy_DH_passive
+}
+# Script used to check if HAProxy is running
+vrrp_script check_haproxy {
+script "killall -0 haproxy"
+interval 2
+weight 2
+}
+# Virtual interface
+# The priority specifies the order in which the assigned interface to take over in a failover
+vrrp_instance VI_01 {
+state BACKUP
+interface ens4
+virtual_router_id 51
+priority 100
+# The virtual ip address shared between the two loadbalancers
+virtual_ipaddress {
+10.129.0.24
+}
+track_script {
+check_haproxy
+}
+}
+
+#----Запускаем
+root@proxy1:/home/house# systemctl status keepalived.service
+
+#----Смотрим сеть - новой не добавилось
+root@proxy1:/home/house# ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host
+       valid_lft forever preferred_lft forever
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000
+    link/ether d0:0d:66:3a:92:a0 brd ff:ff:ff:ff:ff:ff
+    altname enp138s0
+    altname ens8
+    inet 10.129.0.34/24 metric 100 brd 10.129.0.255 scope global eth0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::d20d:66ff:fe3a:92a0/64 scope link
+       valid_lft forever preferred_lft forever
+	   
+	   
+	   
+#----Еще раз стопаю, стартую, проверяю статус
+root@proxy1:/home/house# systemctl stop keepalived.service
+
+root@proxy1:/home/house# systemctl start keepalived.service
+
+root@proxy1:/home/house# systemctl status keepalived.service
+○ keepalived.service - Keepalive Daemon (LVS and VRRP)
+     Loaded: loaded (/lib/systemd/system/keepalived.service; enabled; vendor preset: enabled)
+     Active: inactive (dead) since Wed 2022-09-14 04:37:47 UTC; 5s ago
+    Process: 1997 ExecStart=/usr/sbin/keepalived --dont-fork $DAEMON_ARGS (code=exited, status=0/SUCCESS)
+   Main PID: 1997 (code=exited, status=0/SUCCESS)
+        CPU: 9ms
+
+Sep 14 04:37:47 proxy1 systemd[1]: keepalived.service: Got notification message from PID 1998, but reception only permitted for ma>Sep 14 04:37:47 proxy1 Keepalived_vrrp[1998]: WARNING - default user 'keepalived_script' for script execution does not exist - ple>Sep 14 04:37:47 proxy1 Keepalived_vrrp[1998]: (/etc/keepalived/keepalived.conf: Line 15) WARNING - interface ens4 for vrrp_instanc>Sep 14 04:37:47 proxy1 Keepalived_vrrp[1998]: Non-existent interface specified in configuration
+Sep 14 04:37:47 proxy1 Keepalived_vrrp[1998]: Stopped
+Sep 14 04:37:47 proxy1 Keepalived[1997]: Startup complete
+Sep 14 04:37:47 proxy1 systemd[1]: Started Keepalive Daemon (LVS and VRRP).
+Sep 14 04:37:47 proxy1 Keepalived[1997]: pid 1998 exited with permanent error CONFIG. Terminating
+Sep 14 04:37:47 proxy1 Keepalived[1997]: Stopped Keepalived v2.2.4 (08/21,2021)
+Sep 14 04:37:47 proxy1 systemd[1]: keepalived.service: Deactivated successfully.
+
+
+#----Смотрю логи - не нравится интерфейс
+
+root@proxy1:/home/house# sudo journalctl -eu keepalived.service
+Sep 14 04:29:37 proxy1 Keepalived[1977]: WARNING - keepalived was built for newer Linux 5.15.27, running on Linux 5.15.0-47-generi>Sep 14 04:29:37 proxy1 Keepalived[1977]: Command line: '/usr/sbin/keepalived' '--dont-fork'
+Sep 14 04:29:37 proxy1 Keepalived[1977]: Configuration file /etc/keepalived/keepalived.conf
+Sep 14 04:29:37 proxy1 Keepalived[1977]: (Line 3) Unknown keyword 'lvs_id'
+Sep 14 04:29:37 proxy1 Keepalived[1977]: NOTICE: setting config option max_auto_priority should result in better keepalived perfor>Sep 14 04:29:37 proxy1 Keepalived[1977]: Starting VRRP child process, pid=1978
+Sep 14 04:29:37 proxy1 systemd[1]: keepalived.service: Got notification message from PID 1978, but reception only permitted for ma>Sep 14 04:29:37 proxy1 systemd[1]: Started Keepalive Daemon (LVS and VRRP).
+Sep 14 04:29:37 proxy1 Keepalived[1977]: Startup complete
+Sep 14 04:29:37 proxy1 Keepalived[1977]: pid 1978 exited with permanent error CONFIG. Terminating
+Sep 14 04:29:37 proxy1 Keepalived[1977]: Stopped Keepalived v2.2.4 (08/21,2021)
+Sep 14 04:29:37 proxy1 systemd[1]: keepalived.service: Deactivated successfully.
+Sep 14 04:37:47 proxy1 systemd[1]: Starting Keepalive Daemon (LVS and VRRP)...
+Sep 14 04:37:47 proxy1 Keepalived[1997]: Starting Keepalived v2.2.4 (08/21,2021)
+Sep 14 04:37:47 proxy1 Keepalived[1997]: WARNING - keepalived was built for newer Linux 5.15.27, running on Linux 5.15.0-47-generi>Sep 14 04:37:47 proxy1 Keepalived[1997]: Command line: '/usr/sbin/keepalived' '--dont-fork'
+Sep 14 04:37:47 proxy1 Keepalived[1997]: Configuration file /etc/keepalived/keepalived.conf
+Sep 14 04:37:47 proxy1 Keepalived[1997]: (Line 3) Unknown keyword 'lvs_id'
+Sep 14 04:37:47 proxy1 Keepalived[1997]: NOTICE: setting config option max_auto_priority should result in better keepalived perfor>Sep 14 04:37:47 proxy1 Keepalived[1997]: Starting VRRP child process, pid=1998
+Sep 14 04:37:47 proxy1 systemd[1]: keepalived.service: Got notification message from PID 1998, but reception only permitted for ma>Sep 14 04:37:47 proxy1 Keepalived_vrrp[1998]: WARNING - default user 'keepalived_script' for script execution does not exist - ple>Sep 14 04:37:47 proxy1 Keepalived_vrrp[1998]: (/etc/keepalived/keepalived.conf: Line 15) WARNING - interface ens4 for vrrp_instanc>Sep 14 04:37:47 proxy1 Keepalived_vrrp[1998]: Non-existent interface specified in configuration
+Sep 14 04:37:47 proxy1 Keepalived_vrrp[1998]: Stopped
+Sep 14 04:37:47 proxy1 Keepalived[1997]: Startup complete
+Sep 14 04:37:47 proxy1 systemd[1]: Started Keepalive Daemon (LVS and VRRP).
+Sep 14 04:37:47 proxy1 Keepalived[1997]: pid 1998 exited with permanent error CONFIG. Terminating
+Sep 14 04:37:47 proxy1 Keepalived[1997]: Stopped Keepalived v2.2.4 (08/21,2021)
+Sep 14 04:37:47 proxy1 systemd[1]: keepalived.service: Deactivated successfully.
+lines 22-51/51 (END)
+
+
+
+#----Поправил interface eth0
+
+sudo nano /etc/keepalived/keepalived.conf
+
+-------------
+global_defs {
+# Keepalived process identifier
+lvs_id haproxy_DH
+}
+# Script used to check if HAProxy is running
+vrrp_script check_haproxy {
+script "killall -0 haproxy"
+interval 2
+weight 2
+}
+# Virtual interface
+# The priority specifies the order in which the assigned interface to take over in a failover
+vrrp_instance VI_01 {
+state MASTER
+interface eth0
+virtual_router_id 51
+priority 101
+# The virtual ip address shared between the two loadbalancers
+virtual_ipaddress {
+10.129.0.24
+}
+track_script {
+check_haproxy
+}
+}
+------------
+
+
+#----Запускаем - проверяем - ОК
+
+root@proxy1:/home/house# systemctl stop keepalived.service
+root@proxy1:/home/house# systemctl start keepalived.service
+root@proxy1:/home/house# systemctl status keepalived.service
+● keepalived.service - Keepalive Daemon (LVS and VRRP)
+     Loaded: loaded (/lib/systemd/system/keepalived.service; enabled; vendor preset: enabled)
+     Active: active (running) since Wed 2022-09-14 04:55:49 UTC; 10s ago
+   Main PID: 2044 (keepalived)
+      Tasks: 2 (limit: 2236)
+     Memory: 2.1M
+        CPU: 21ms
+     CGroup: /system.slice/keepalived.service
+             ├─2044 /usr/sbin/keepalived --dont-fork
+             └─2045 /usr/sbin/keepalived --dont-fork
+
+Sep 14 04:55:49 proxy1 systemd[1]: keepalived.service: Got notification message from PID 2045, but reception only permitted for ma>Sep 14 04:55:49 proxy1 Keepalived_vrrp[2045]: WARNING - default user 'keepalived_script' for script execution does not exist - ple>Sep 14 04:55:49 proxy1 Keepalived_vrrp[2045]: WARNING - script `killall` resolved by path search to `/usr/bin/killall`. Please spe>Sep 14 04:55:49 proxy1 Keepalived_vrrp[2045]: SECURITY VIOLATION - scripts are being executed but script_security not enabled.
+Sep 14 04:55:49 proxy1 Keepalived_vrrp[2045]: (VI_01) Entering BACKUP STATE (init)
+Sep 14 04:55:49 proxy1 Keepalived[2044]: Startup complete
+Sep 14 04:55:49 proxy1 systemd[1]: Started Keepalive Daemon (LVS and VRRP).
+Sep 14 04:55:49 proxy1 Keepalived_vrrp[2045]: VRRP_Script(check_haproxy) succeeded
+Sep 14 04:55:49 proxy1 Keepalived_vrrp[2045]: (VI_01) Changing effective priority from 101 to 103
+Sep 14 04:55:53 proxy1 Keepalived_vrrp[2045]: (VI_01) Entering MASTER STATE
+
+root@proxy1:/home/house# ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host
+       valid_lft forever preferred_lft forever
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000
+    link/ether d0:0d:66:3a:92:a0 brd ff:ff:ff:ff:ff:ff
+    altname enp138s0
+    altname ens8
+    inet 10.129.0.34/24 metric 100 brd 10.129.0.255 scope global eth0
+       valid_lft forever preferred_lft forever
+    inet 10.129.0.24/32 scope global eth0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::d20d:66ff:fe3a:92a0/64 scope link
+       valid_lft forever preferred_lft forever
+root@proxy1:/home/house# 
+
+
